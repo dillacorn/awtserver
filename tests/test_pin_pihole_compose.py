@@ -55,7 +55,9 @@ class PinTests(unittest.TestCase):
 
     def test_explicit_append_only_extension(self):
         original = {'COMPOSE_FILE': 'compose.yml:compose.override.yml:compose.tailscale-dns.yml'}
-        with patch.dict('os.environ', {}, clear=True), patch.object(pin, 'run', return_value='100.124.11.69'):
+        ipv6 = {'LAN_INTERFACE': 'enp3s0', 'LAN_IPV6_SUBNET': '2001:db8:1::/64',
+                'LAN_IPV6_GATEWAY': '2001:db8:1::1', 'PIHOLE_IPV6': '2001:db8:1::53'}
+        with patch.dict('os.environ', ipv6, clear=True), patch.object(pin, 'run', return_value='100.124.11.69'):
             values = pin.collect_updates(
                 ['compose.yml', 'compose.override.yml', 'compose.tailscale-dns.yml',
                  'compose.ipv6-dns.yml'], original, extend=True)

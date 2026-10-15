@@ -29,6 +29,7 @@ jobs:
           WUD_SMTP_PORT: '587'
           WUD_SMTP_USER: example
           WUD_SMTP_PASS: fake-ci-password
+          WUD_AUTH_ADMIN_PASSWORD: fake-ci-admin-password
         run: docker compose -f docker/wud/compose_example.yml config --quiet
       - name: Check updater gates and excluded infrastructure
         run: |
@@ -39,6 +40,10 @@ jobs:
           assert "getwud/wud:9.4.1" in example
           assert '/var/run/docker.sock:/var/run/docker.sock' in example
           assert 'WUD_SERVER_ENABLED: "false"' in example
+          assert 'WUD_AUTH_ADMIN_USER: "admin"' in example
+          assert 'WUD_AUTH_ADMIN_PASSWORD: "${WUD_AUTH_ADMIN_PASSWORD:?missing_local_admin_password}"' in example
+          assert 'secrets.token_hex(32)' in script
+          assert 'wud_ready=1' in script
           assert 'WUD_WATCHER_LOCAL_WATCHATSTART: "false"' in example
           assert 'WUD_WATCHER_LOCAL_WATCHEVENTS: "false"' in example
           assert 'WUD_TRIGGER_DOCKER_UPDATES_AUTO: "true"' in example

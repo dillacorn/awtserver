@@ -1,0 +1,3 @@
+// Capture the original running container IDs only when APT installs a Docker
+// runtime .deb. The hook is deliberately fail-open, never blocking APT.
+DPkg::Pre-Install-Pkgs { "/usr/local/libexec/omv-docker-upgrade-recovery snapshot"; };

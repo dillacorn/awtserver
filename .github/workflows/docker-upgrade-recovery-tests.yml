@@ -1,0 +1,33 @@
+name: Docker runtime upgrade recovery tests
+
+on:
+  pull_request:
+    paths:
+      - 'docker/engine-upgrade-recovery/**'
+      - 'tests/test_docker_upgrade_recovery.py'
+      - 'tests/test_live_restore.py'
+      - '.github/workflows/docker-upgrade-recovery-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/engine-upgrade-recovery/**'
+      - 'tests/test_docker_upgrade_recovery.py'
+      - 'tests/test_live_restore.py'
+      - '.github/workflows/docker-upgrade-recovery-tests.yml'
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate scripts and APT hook
+        run: |
+          bash -n docker/engine-upgrade-recovery/install.sh
+          python3 -m py_compile docker/engine-upgrade-recovery/*.py
+          apt-config -c docker/engine-upgrade-recovery/90-omv-docker-upgrade-recovery dump | grep -F 'DPkg::Pre-Install-Pkgs:: "/usr/local/libexec/omv-docker-upgrade-recovery snapshot";'
+          docker/engine-upgrade-recovery/install.sh --check
+      - name: Offline recovery behavior tests
+        run: python3 -m unittest discover -s tests -v

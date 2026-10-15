@@ -1,0 +1,11 @@
+[Unit]
+Description=Check pending APT Docker-upgrade recovery
+
+[Timer]
+OnBootSec=2min
+OnCalendar=*-*-* *:*:00
+AccuracySec=15s
+Unit=omv-docker-upgrade-recovery.service
+
+[Install]
+WantedBy=timers.target

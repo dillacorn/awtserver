@@ -1,0 +1,9 @@
+[Unit]
+Description=Reconcile Docker containers previously running before an APT Docker upgrade
+After=docker.service containerd.service
+ConditionPathExists=/var/lib/omv-docker-upgrade-recovery/pending.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/omv-docker-upgrade-recovery recover
+TimeoutStartSec=90s

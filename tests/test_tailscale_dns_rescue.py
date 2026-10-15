@@ -18,7 +18,7 @@ class RescueTests(unittest.TestCase):
             'docker': '''#!/bin/sh
 case "$1" in
   inspect) printf 'true false\\n';;
-  port) printf '192.168.68.2:53\\n';;
+  port) printf '192.168.68.2:53\\n'; if [ -n "${FAKE_NATIVE_DNS:-}" ]; then printf '100.124.11.69:53\\n'; fi;;
   *) printf 'UNEXPECTED docker invocation: %s\\n' "$*" >&2; exit 2;;
 esac
 ''',
@@ -45,8 +45,10 @@ else: sys.exit(2)
             f.write_text(script)
             f.chmod(0o755)
 
-    def run_script(self, action):
+    def run_script(self, action, native=False):
         env = dict(os.environ, PATH=str(self.bin)+':'+os.environ['PATH'], FAKE_RULE_DIR=str(self.directory))
+        if native:
+            env['FAKE_NATIVE_DNS'] = 'yes'
         return subprocess.run(['bash',str(SCRIPT),action],text=True,capture_output=True,env=env,timeout=5)
 
     def test_unprivileged_check_no_changes(self):
@@ -64,7 +66,7 @@ else: sys.exit(2)
         result=self.run_script('--check')
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertIn('Present tcp',result.stdout)
-        result=self.run_script('--remove')
+        result=self.run_script('--remove', native=True)
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertFalse((self.directory/'udp').exists())
         self.assertFalse((self.directory/'tcp').exists())

@@ -5,7 +5,7 @@ set -euo pipefail
 
 main() {
     local action="${1:---check}" container="${PIHOLE_CONTAINER:-pihole}"
-    local tsip udp_binding tcp_binding lan_ip protocol added=()
+    local tsip udp_binding tcp_binding lan_ip protocol added=() native_udp=0 native_tcp=0
     local -a rule
 
     case "$action" in
@@ -26,11 +26,45 @@ main() {
     tsip="$(tailscale ip -4)"
     udp_binding="$(docker port "$container" 53/udp)"
     tcp_binding="$(docker port "$container" 53/tcp)"
-    [[ "$udp_binding" == "$tcp_binding" && "$udp_binding" != *$'\n'* ]] || {
-        printf 'ERROR: ambiguous or mismatched DNS port bindings\n' >&2
-        return 1
-    }
-    lan_ip="${udp_binding%:53}"
+    # A corrected Pi-hole may publish *both* LAN and Tailscale addresses.
+    # Retain the LAN address for removing previously inserted rescue rules.
+    lan_ip="$(python3 - "$tsip" "$udp_binding" "$tcp_binding" <<'PYPORT'
+import ipaddress
+import sys
+
+tail, udp, tcp = sys.argv[1:]
+def get_entries(lines):
+    entries = set()
+    for line in lines.splitlines():
+        if not line.endswith(':53'):
+            raise ValueError('unexpected port publication')
+        ip = line[:-3]
+        ipaddress.IPv4Address(ip)
+        entries.add(ip)
+    return entries
+
+try:
+    udp_entries, tcp_entries = get_entries(udp), get_entries(tcp)
+    if not udp_entries or udp_entries != tcp_entries:
+        raise ValueError('mismatched TCP and UDP DNS publication')
+    lans = [x for x in udp_entries if x != tail and not (
+        ipaddress.IPv4Address(x).is_unspecified or
+        ipaddress.IPv4Address(x).is_loopback or
+        ipaddress.IPv4Address(x).is_multicast)]
+    if len(lans) != 1:
+        raise ValueError('expected one unambiguous LAN DNS binding')
+    print(lans[0])
+except ValueError as error:
+    sys.stderr.write('ERROR: ' + str(error) + '\n')
+    raise SystemExit(1)
+PYPORT
+)" || return 1
+    if [[ "$udp_binding" == *"${tsip}:53"* ]]; then native_udp=1; fi
+    if [[ "$tcp_binding" == *"${tsip}:53"* ]]; then native_tcp=1; fi
+    if [[ "$action" == --apply && "$native_udp" == 1 && "$native_tcp" == 1 ]]; then
+        printf 'Native Tailscale DNS ports already published; no rescue rules needed.\n'
+        return 0
+    fi
     python3 - "$tsip" "$lan_ip" <<'PY'
 import ipaddress, sys
 try:

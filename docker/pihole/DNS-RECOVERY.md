@@ -80,3 +80,36 @@ Do **not** trigger an APT upgrade, restart Docker, change the host DNS resolver,
 The [Docker upgrade recovery feature](../engine-upgrade-recovery/README.md) separately snapshots running container IDs before APT runtime upgrades and only restarts existing previously-running containers if they unexpectedly stop. It cannot recreate missing port bindings, recover a container that has been replaced with an incomplete Compose configuration, or fix unhealthy application processes. Compose-file pinning solves the unrelated *overlay-omission* failure mode.
 
 Docker reference: [Pre-defined Compose variables](https://docs.docker.com/compose/how-tos/environment-variables/envvars/) and [variable interpolation](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/).
+
+## Optional persistent DNS continuity guard (without Pi-hole restarts)
+
+When Tailscale DNS was lost due to a missing native Pi-hole port binding, the
+rescue DNAT rule can disappear on reboot or after Docker rebuilds firewall
+rules. The opt-in **dns-guard** systemd timer checks every minute and maintains
+only the Tailscale-interface-scoped rescue rules until native publication is
+restored. The guard does not restart any container or Docker daemon. When both
+native TCP/UDP port 53 bindings become available, the guard removes only its
+own rescue rules, restoring direct per-client DNS attribution.
+
+On the actual OMV host, from the repository checkout:
+
+    cd docker/pihole/dns-guard
+    bash install.sh --check
+    bash install.sh --apply
+
+The installer copies the verified rescue helper, DNS guard, timer and service
+into protected host paths. It refuses to overwrite unrelated/locally edited
+files. No Pi-hole or Docker restart occurs. The guard is only appropriate for
+hosts intentionally using Pi-hole as a Tailscale DNS server.
+
+Inspect the timer and status:
+
+    systemctl is-active omv-pihole-tailscale-dns-guard.timer
+    journalctl -u omv-pihole-tailscale-dns-guard.service -n 30 --no-pager
+
+To disable the timer without removing currently working DNS rescue rules:
+
+    systemctl disable --now omv-pihole-tailscale-dns-guard.timer
+
+Removing the forwarding rules while native DNS is still missing would break
+remote DNS. Restore and verify native DNS before removing the rescue rules.

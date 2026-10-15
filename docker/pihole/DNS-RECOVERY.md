@@ -35,6 +35,28 @@ For this example to validate, `LAN_INTERFACE`, `LAN_IPV6_SUBNET`, `LAN_IPV6_GATE
 
 Use only the overlays actually required by **your** deployment; `compose.override.yml` is optional. If your stack uses a different set, specify that exact ordered set. `COMPOSE_FILE` is used for **bare** `docker compose` commands. An explicit `docker compose -f ...` command overrides it; avoid ad-hoc partial file lists. Other tools that pass explicit Compose files may also override it. This is protection against a common operator mistake, not a global enforcement mechanism.
 
+### Extend an existing pinned Compose file set
+
+If you initially pinned the base/override/Tailscale overlays and later want to
+add IPv6, use the explicit `--extend` flag. It permits **only appending** new
+overlay files; it will never remove or reorder already pinned files.
+
+After checking the actual IPv6 delegated prefix, gateway, parent LAN interface,
+and address, make the four `LAN_*` / `PIHOLE_IPV6` values available from the
+host's local `.env` or the command environment. **Do not guess them or use a
+stale delegated prefix.** Then preview the entire validated set:
+
+```bash
+python3 pin-compose-files.py --project-dir /docker/pihole \
+  --file compose.yml --file compose.override.yml \
+  --file compose.tailscale-dns.yml --file compose.ipv6-dns.yml --extend
+```
+
+Repeat with `--extend --apply` after the preview succeeds. The original
+`.env` is backed up, unrelated values are preserved, and no containers are
+modified. Pinning is only preparation: activating a missing IPv6 macvlan
+attachment still requires a scheduled Compose recreation.
+
 **Pinning does not repair already-running containers.** Restoring a removed Docker-published port requires planned container recreation, with an interruption possible. Preserve remote management and wait for a maintenance window before doing so.
 
 ## Restore remote DNS temporarily without stopping Pi-hole

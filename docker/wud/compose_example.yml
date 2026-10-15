@@ -12,11 +12,12 @@ services:
     environment:
       TZ: America/New_York
       WUD_LOG_LEVEL: info
+      WUD_SERVER_ENABLED: "false"
       # Strict anchored name allowlist generated from live Watchtower arguments.
       WUD_WATCHER_LOCAL_INCLUDE: "${WUD_WATCHER_LOCAL_INCLUDE:?missing_name_allowlist}"
       WUD_WATCHER_LOCAL_WATCHBYDEFAULT: "false"
       WUD_WATCHER_LOCAL_CRON: "45 2 * * *"
-      WUD_WATCHER_LOCAL_WATCHATSTART: "false"
+      WUD_WATCHER_LOCAL_WATCHATSTART: "true"
       WUD_WATCHER_LOCAL_WATCHEVENTS: "false"
       WUD_WATCHER_LOCAL_WATCHDIGESTDEFAULT: "true"
       # Mail remains disabled in staging; update trigger is not present.

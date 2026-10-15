@@ -1,0 +1,49 @@
+name: Docker runtime upgrade recovery tests
+
+on:
+  pull_request:
+    paths:
+      - 'docker/engine-upgrade-recovery/**'
+      - 'tests/test_docker_upgrade_recovery.py'
+      - 'tests/test_live_restore.py'
+      - 'docker/pihole/dns-guard/**'
+      - 'docker/pihole/tailscale-dns-rescue.sh'
+      - 'docker/pihole/pin-compose-files.py'
+      - 'tests/test_tailscale_dns_guard.py'
+      - 'tests/test_tailscale_dns_rescue.py'
+      - 'tests/test_pin_pihole_compose.py'
+      - '.github/workflows/docker-upgrade-recovery-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/engine-upgrade-recovery/**'
+      - 'tests/test_docker_upgrade_recovery.py'
+      - 'tests/test_live_restore.py'
+      - 'docker/pihole/dns-guard/**'
+      - 'docker/pihole/tailscale-dns-rescue.sh'
+      - 'docker/pihole/pin-compose-files.py'
+      - 'tests/test_tailscale_dns_guard.py'
+      - 'tests/test_tailscale_dns_rescue.py'
+      - 'tests/test_pin_pihole_compose.py'
+      - '.github/workflows/docker-upgrade-recovery-tests.yml'
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate scripts and APT hook
+        run: |
+          bash -n docker/engine-upgrade-recovery/install.sh
+          bash -n docker/pihole/dns-guard/install.sh
+          bash -n docker/pihole/dns-guard/omv-pihole-tailscale-dns-guard
+          bash -n docker/pihole/tailscale-dns-rescue.sh
+          docker/pihole/dns-guard/install.sh --check
+          python3 -m py_compile docker/engine-upgrade-recovery/*.py
+          apt-config -c docker/engine-upgrade-recovery/90-omv-docker-upgrade-recovery dump | grep -F 'DPkg::Pre-Install-Pkgs:: "/usr/local/libexec/omv-docker-upgrade-recovery snapshot";'
+          docker/engine-upgrade-recovery/install.sh --check
+      - name: Offline recovery behavior tests
+        run: python3 -m unittest discover -s tests -v

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Keep the Tailscale-only DNS rescue active only while native DNS is absent.
+# Never stop/recreate containers or modify Compose files.
+set -euo pipefail
+
+container="${PIHOLE_CONTAINER:-pihole}"
+rescue="${OMV_DNS_RESCUE_PATH:-/usr/local/libexec/omv-pihole-tailscale-dns-rescue}"
+
+[[ -x "$rescue" ]] || { printf 'ERROR: DNS rescue helper missing: %s\n' "$rescue" >&2; exit 1; }
+[[ "$(docker inspect --format '{{.State.Running}} {{.State.Paused}}' "$container")" == 'true false' ]] || {
+    printf 'Pi-hole not running or paused; leaving existing DNS firewall state unchanged\n' >&2
+    exit 1
+}
+
+tsip="$(tailscale ip -4)"
+udp="$(docker port "$container" 53/udp)"
+tcp="$(docker port "$container" 53/tcp)"
+
+if [[ "${udp}" == *"${tsip}:53"* && "${tcp}" == *"${tsip}:53"* ]]; then
+    printf 'Native Tailscale DNS is published; remove only previously installed rescue rules\n'
+    "$rescue" --remove
+else
+    printf 'Native Tailscale DNS missing; ensure scoped rescue rules exist\n'
+    "$rescue" --apply
+fi

@@ -49,11 +49,14 @@ else: sys.exit(2)
         env = dict(os.environ, PATH=str(self.bin)+':'+os.environ['PATH'], FAKE_RULE_DIR=str(self.directory))
         return subprocess.run(['bash',str(SCRIPT),action],text=True,capture_output=True,env=env,timeout=5)
 
-    def test_check_apply_remove_without_docker_restart(self):
+    def test_unprivileged_check_no_changes(self):
         result=self.run_script('--check')
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertIn('Absent udp',result.stdout)
         self.assertFalse((self.directory/'udp').exists())
+
+    @unittest.skipUnless(os.geteuid() == 0, 'Firewall mutation test requires root')
+    def test_check_apply_remove_without_docker_restart(self):
         result=self.run_script('--apply')
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertTrue((self.directory/'udp').exists())

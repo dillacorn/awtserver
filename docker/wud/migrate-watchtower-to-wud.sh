@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Replace Watchtower with WUD without touching application, DNS, or Tailscale containers.
 set -euo pipefail
+printf '\n[WUD 1/6] Checking host, Docker, Watchtower, and DNS...\n'
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 [[ ${EUID} == 0 ]] || fail "Run as root"
 [[ "$(hostname)" == openmediavault ]] || fail "Not the expected OMV host"
@@ -45,14 +46,16 @@ if ids:
 print(f"Verified Watchtower project {labels.get('com.docker.compose.project')}: {len(expected)} allowed application names")
 PY
 
+printf '[WUD 2/6] Downloading replacement Compose over IPv4 (35-second deadline)...\n'
 tmp="$(mktemp -d)"
 trap 'rm -rf -- "$tmp"' EXIT
 ref="${WUD_SOURCE_REF:-main}"
-curl -fLsS --retry 2 \
+curl -4 -fLSs --connect-timeout 8 --max-time 35 --retry 1 --retry-delay 1 \
   "https://raw.githubusercontent.com/dillacorn/omv-remote-dots/${ref}/docker/wud/compose_example.yml" \
   -o "$tmp/compose.yml"
 [[ -s "$tmp/compose.yml" ]] || fail "Unable to download WUD Compose"
 
+printf '[WUD 3/6] Preparing private configuration and SMTP import...\n'
 umask 077
 install -d -m 0700 /docker/wud /docker/wud/store
 install -m 0644 "$tmp/compose.yml" /docker/wud/compose.yml
@@ -91,6 +94,7 @@ print("Private SMTP settings imported to /docker/wud/.env without displaying sec
 PY
 
 # Validate/pull WUD while Watchtower is still alive.
+printf '[WUD 4/6] Validating Compose and downloading WUD image; Docker pull progress will appear...\n'
 (cd /docker/wud && docker compose config --quiet && docker compose pull wud)
 
 stamp="$(date '+%Y%m%d-%H%M%S')"
@@ -114,6 +118,7 @@ recover() {
 }
 trap recover EXIT
 
+printf '[WUD 5/6] Switching Watchtower to WUD (rollback armed)...\n'
 switch_started=1
 docker update --restart=no watchtower >/dev/null
 docker stop --time 30 watchtower >/dev/null
@@ -149,6 +154,7 @@ PY
 
 [[ "$dns_before" == "$(docker inspect -f '{{.Id}} {{.State.Running}}' pihole dnsproxy-quad9 nginx-pihole)" ]] ||
   fail "DNS container state changed unexpectedly"
+printf '[WUD 6/6] WUD is running; DNS identities verified.\n'
 switch_ok=1
 trap - EXIT
 

@@ -1,0 +1,34 @@
+# Safe first stage: WUD monitors Watchtower's allowlist, but cannot auto-update
+# anything. No ports are published and Watchtower remains running.
+# /docker/wud/.env is generated locally and is never committed.
+services:
+  wud:
+    image: getwud/wud:9.4.1
+    container_name: wud
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./store:/store
+    environment:
+      TZ: America/New_York
+      WUD_LOG_LEVEL: info
+      # Strict anchored name allowlist generated from live Watchtower arguments.
+      WUD_WATCHER_LOCAL_INCLUDE: "${WUD_WATCHER_LOCAL_INCLUDE:?missing_name_allowlist}"
+      WUD_WATCHER_LOCAL_WATCHBYDEFAULT: "false"
+      WUD_WATCHER_LOCAL_CRON: "45 2 * * *"
+      WUD_WATCHER_LOCAL_WATCHATSTART: "false"
+      WUD_WATCHER_LOCAL_WATCHEVENTS: "false"
+      WUD_WATCHER_LOCAL_WATCHDIGESTDEFAULT: "true"
+      # Mail remains disabled in staging; update trigger is not present.
+      WUD_TRIGGER_SMTP_LEGACY_AUTO: "false"
+      WUD_TRIGGER_SMTP_LEGACY_EVENTS: "success,failure,rollback"
+      WUD_TRIGGER_SMTP_LEGACY_HOST: "${WUD_SMTP_HOST:?missing_smtp_host}"
+      WUD_TRIGGER_SMTP_LEGACY_PORT: "${WUD_SMTP_PORT:?missing_smtp_port}"
+      WUD_TRIGGER_SMTP_LEGACY_USER: "${WUD_SMTP_USER:?missing_smtp_user}"
+      WUD_TRIGGER_SMTP_LEGACY_PASS: "${WUD_SMTP_PASS:?missing_smtp_password}"
+      WUD_TRIGGER_SMTP_LEGACY_FROM_ADDRESS: "${WUD_SMTP_FROM:?missing_smtp_from}"
+      WUD_TRIGGER_SMTP_LEGACY_TO: "${WUD_SMTP_TO:?missing_smtp_to}"
+      WUD_TRIGGER_SMTP_LEGACY_TLS_ENABLED: "false"
+      WUD_TRIGGER_SMTP_LEGACY_TLS_VERIFY: "true"
+    labels:
+      wud.watch: "false"

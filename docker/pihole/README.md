@@ -14,6 +14,8 @@ For the normal recommended setup, use [SETUP.md](SETUP.md).
 
 For the deeper IPv6, Tailscale, Docker, ASUS/BGW320, and troubleshooting details, use [NETWORKING.md](NETWORKING.md).
 
+To prevent accidentally losing Tailscale/IPv6 DNS bindings during Compose recreation, or temporarily recover remote DNS **without stopping Pi-hole**, see [DNS-RECOVERY.md](DNS-RECOVERY.md).
+
 Keep normal setup simple. The advanced networking guide exists so the main setup does not have to carry every edge case.
 
 ### Optional NextDNS upstream

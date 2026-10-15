@@ -111,7 +111,7 @@ docker compose \
   config
 ```
 
-Use the same active overlay set when recreating the stack.
+Use the same active overlay set when recreating the stack. To make ordinary bare `docker compose` commands use the intended overlay set, pin `COMPOSE_FILE` in the project's local `.env` as described in [DNS-RECOVERY.md](DNS-RECOVERY.md). The helper never recreates Pi-hole; native DNS bindings still require a planned Compose recreation if already lost.
 
 The macvlan solves Pi-hole IPv6 reachability. It does not force stock ASUSWRT to advertise Pi-hole itself as RDNSS.
 

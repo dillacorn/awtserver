@@ -10,6 +10,8 @@ APT-driven Docker Engine/containerd upgrades should not leave previously running
 4. After a runtime restart, it inspects **those exact container IDs** and starts only containers which were running when the update began and are now unexpectedly exited, dead, or created. A second timer check verifies started containers remain running. Transient start failures retry, up to eight checks within one hour. Remaining failures are logged and stored in `last-result.json`.
 5. Missing/replaced containers, changed restart policies, paused services and unhealthy-but-running containers are **never forcibly recreated or restarted**. Those conditions are reported for manual inspection.
 
+For the separate problem of a Pi-hole stack accidentally recreated without its Tailscale/IPv6 Compose overlays, see [Pi-hole DNS recovery](../pihole/DNS-RECOVERY.md). A Docker restart safeguard cannot restore host port bindings deleted by an incomplete Compose configuration.
+
 No `docker compose up`, `docker compose restart`, blanket `docker start $(docker ps -aq)`, image pull, volume change, configuration overlay substitution, or forced container recreation occurs. In particular, the Pi-hole/Tailscale/IPv6 Compose overlay stack is never touched by this recovery mechanism.
 
 This cannot prevent every outage. A container may crash repeatedly, lose upstream DNS, or be unhealthy while still running; restoring the process does not repair application-specific errors. Manual Docker operations and direct `dpkg -i` do not invoke the APT snapshot hook. Recovery snapshots expire after one hour, and overwritten/deleted container identities require separate investigation.

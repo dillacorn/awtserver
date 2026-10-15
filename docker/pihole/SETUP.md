@@ -155,6 +155,8 @@ Override DNS servers: on
 
 Remove any direct NextDNS global resolver instead of leaving both active.
 
+**Protect this setup before later Compose commands:** A plain `docker compose up -d` can omit the optional Tailscale overlay and recreate Pi-hole without its remote DNS listener. Pin the **correct** complete Compose file list in `.env` using [DNS-RECOVERY.md](DNS-RECOVERY.md). This does not restart Pi-hole. If the live container has already lost the overlay, do not pin its broken file list.
+
 Verify a Tailscale client reaches Pi-hole with its own `100.x` address:
 
 ```bash

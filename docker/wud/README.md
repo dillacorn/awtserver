@@ -1,96 +1,101 @@
-# WUD migration from live Watchtower (staged)
+# What's Up Docker (WUD): replacement for Watchtower
 
-This directory replaces the legacy Watchtower updater **after runtime validation**.
-It is not a mirror of the live OMV host. Do not treat the sample as proof that WUD
-has been installed or that Watchtower has been decommissioned.
+This directory contains WUD 9.4.1 Compose and a one-shot, guarded OMV
+migration script. The public repository contains **no SMTP addresses, passwords,
+access tokens or server-specific authentication credentials**.
 
-**Current scope:** WUD 9.4.1, monitoring-only staging, then an explicitly gated
-Docker update trigger. No automatic update trigger is enabled in the base Compose.
+## Design
 
-## Why this configuration
+- Target host: `openmediavault`; current live Compose source:
+  `/docker/watchtower/compose.yml`.
+- Reads the **running** Watchtower container and verifies Compose labels, the
+  complete reviewed 28-application allowlist, and daily 02:45 schedule.
+- Creates `/docker/wud/compose.yml` and a root-only `/docker/wud/.env`.
+  SMTP credentials are inherited from the currently running Watchtower's
+  Docker environment, not from GitHub.
+- WUD 9.4.1 runs without HTTP/API, with a persistent `/docker/wud/store`
+  directory and no published ports.
+- WUD's name `INCLUDE` regex is anchored to exact Watchtower-selected
+  application container names; additional `EXCLUDE` regex blocks Pi-hole,
+  Quad9 dnsproxy, nginx-pihole, Watchtower and WUD.
+- WUD's `wud.watch=true` label can override watcher include/exclude patterns.
+  Migration fails if any non-selected existing container bears that opt-in label.
+- Automatic image updates at 02:45 America/New_York. No scan at startup or
+  on Docker lifecycle events. Watchtower is stopped and removed as a container.
+- Uses the WUD Docker trigger rather than its Docker Compose trigger to avoid
+  letting the updater rewrite Compose files and overlays under independent
+  `/docker/` directories.
+- SMTP on `success,failure,rollback`. Notifications are best effort, and
+  initial delivery must be verified at the next update event.
+- Healthcheck rollback is enabled; for images lacking HEALTHCHECK, WUD
+  accepts a container after a 15-second running-state check. Rollback does not
+  undo database schema migrations, persistent-file changes, or networking
+  failures invisible to the container healthcheck.
+- WUD itself is pinned to 9.4.1 and excluded from unattended self-updating.
+- Docker Engine updates and host reboots are outside WUD's control. The host
+  Docker upgrade recovery guard remains independent.
 
-- The live Watchtower used `--schedule "0 45 2 * * *"` and a positional
-  allowlist of 28 application containers plus `watchtower` itself.
-- `stage-from-watchtower.sh` re-reads that **running container's** Docker
-  `Config.Cmd` and Compose identity, rejects deviations from the reviewed
-  configuration, and derives an anchored exact-name WUD watcher regex.
-- DNS infrastructure (`pihole`, `dnsproxy-quad9`, `nginx-pihole`) and WUD
-  itself are excluded. No application Compose files or labels are changed.
-- The WUD watcher runs at 02:45 America/New_York, not during SnapRAID's
-  03:45 run. Staging deliberately performs a one-time startup scan for immediate validation;
-  the update overlay disables startup checks. Docker-event-driven checks stay
-  disabled, so scheduled production updates only occur during the 02:45 scan.
-- WUD watches mutable image digests, matching Watchtower's use of many
-  `latest` tags.
-- The Docker trigger is preferred to WUD's Compose trigger here because the
-  live server uses separate Compose project directories and overlay files.
-  The Docker trigger does not edit project Compose files. Recreating containers
-  can nonetheless create drift from their Compose definitions; investigate
-  after updates and before running `docker compose up -d` on those projects.
-- Rollback validates application container state/health only, not database
-  reversibility, network reachability, or functionality of Tailscale sidecars.
-  A new version can irreversibly migrate persistent data despite rollback.
-- WUD's HTTP server/API is disabled; no host port is published.
-- Notification credentials are copied from the live Watchtower Compose into
-  `/docker/wud/.env` (mode 0600); no credentials or personal addresses belong
-  in this public repository.
+## Execute a complete migration
 
-## Stage on the verified OMV host
-
-Run the reviewed feature-branch installer only after checking its contents:
+Run the migration script only after inspecting the commit and performing the
+host-specific preflight checks it contains:
 
 ```bash
-curl -fLsS https://raw.githubusercontent.com/dillacorn/omv-remote-dots/feat/wud-watchtower-migration/docker/wud/stage-from-watchtower.sh -o /tmp/stage-wud.sh
-bash /tmp/stage-wud.sh
+curl -fLsS https://raw.githubusercontent.com/dillacorn/omv-remote-dots/main/docker/wud/migrate-watchtower-to-wud.sh -o /tmp/migrate-watchtower-to-wud.sh
+bash /tmp/migrate-watchtower-to-wud.sh
 ```
 
-It verifies the real host and currently running Watchtower before writing,
-creates `/docker/wud/compose.yml`, `compose.updates.yml`, and a private
-`.env`, then starts *only WUD*. Watchtower and all other containers remain
-running. Only the monitoring-only base file is applied. SMTP is configured
-but inactive in this stage, to avoid duplicate notifications.
+The script:
 
-If any assertion fails, the script stops; **do not bypass checks**.
-It does not automatically retry an incomplete staging directory.
+1. Confirms host, current service names and the live Watchtower command.
+2. Confirms all three critical DNS containers remain running and that no
+   `wud.watch=true` label bypasses the exact allowlist.
+3. Refuses to overwrite existing WUD configurations and refuses to run near
+   Watchtower's scheduled update.
+4. Writes only WUD configuration, pre-pulls the pinned WUD image, and validates
+   resolved Compose before any container stop.
+5. Makes a private backup of the legacy Watchtower Compose file.
+6. Disables Watchtower's restart policy, stops/removes only its container and
+   starts WUD. An EXIT trap attempts to restore Watchtower using the original
+   Compose if WUD startup/effective-config checks fail.
+7. Confirms Pi-hole, dnsproxy and nginx-pihole container identities remained
+   unchanged.
 
-Check:
+Persistent application volumes/networks are never deleted or pruned. The
+legacy `/docker/watchtower/compose.yml` remains for emergency rollback,
+though there is **no Watchtower container** after successful cutover. Do not run
+`docker compose up -d` there again.
+
+### Inspect the result
 
 ```bash
-docker inspect wud --format '{{.State.Status}} {{.State.Health.Status}}'
+docker ps --filter name=wud --format 'table {{.Names}}\t{{.Status}}'
 docker logs --tail 100 wud
-docker inspect watchtower --format '{{.State.Running}} {{.State.RestartCount}}'
+docker inspect wud --format '{{.State.Running}} {{.RestartCount}}'
 ```
 
-## Cutover (NOT yet performed)
+No source repository change proves any runtime deployment succeeded. Capture
+the host command output to confirm. If the private source SMTP password has
+appeared in chat, rotate it after the migration and update `/docker/wud/.env`.
 
-Do not enable unattended updates just because WUD starts. Before cutover:
-verify the actual container names, Compose projects/services, network modes,
-bind mounts, healthchecks and dependency chains for *every* allowlisted
-container, especially `tailscale-*`, `gluetun`, and database services.
-Review WUD logs for all 28 expected names and no DNS services. Verify the
-WUD SMTP target works. Test manual updating/rollback on a disposable or
-non-critical container first. Confirm the SnapRAID/DNS observation and prevent
-any overlap with unattended image pulls/restarts.
+## Important operational notes
 
-After those checks, `compose.updates.yml` enables the Docker updater and
-SMTP notifications. Preserve the Watchtower Compose backup and a rollback
-command, explicitly disable Watchtower's restart policy before stopping it,
-and make sure only one updater is active. No step in staging stops Watchtower.
+- The first scheduled run is the next 02:45 in the local timezone. It may take
+  additional time due to WUD's registry polling and jitter.
+- The 03:45 SnapRAID job and the 03:00 Docker Engine unattended upgrades are
+  independent of WUD. They can still create resource contention or downtime.
+- WUD's 9.x Docker trigger can recreate containers with network namespace
+  dependencies, but those updates have not been runtime-tested on this OMV host.
+  WUD's basic container health gate is not a complete integration test.
+- A failed switch restores Watchtower if Docker is healthy enough to run it.
+  If Docker itself is unavailable, recovery requires manual intervention.
+- A WUD `docker compose up -d` does not update the original application
+  Compose files. Preserve WUD state/config and use scheduled/manual coordinated
+  maintenance for complex dependency stacks.
+- Changing SMTP settings requires updating the root-only `.env` and recreating
+  only WUD using `cd /docker/wud && docker compose up -d wud`.
 
-A future cutover may set `COMPOSE_FILE=compose.yml:compose.updates.yml` in
-the private `.env` and recreate only WUD; but this is **not a safe unattended
-command** until the live checks above pass. Do not blindly run this on OMV.
-
-To undo monitoring-only staging without touching Watchtower:
-
-```bash
-cd /docker/wud && docker compose -f compose.yml down
-```
-
-Do not delete `/docker/wud` without reviewing saved configuration/state.
-
-## Current documentation
-
+Docs:
 - https://getwud.app/docs/configuration/watchers/
 - https://getwud.app/docs/configuration/triggers/docker/
 - https://getwud.app/docs/configuration/triggers/smtp/

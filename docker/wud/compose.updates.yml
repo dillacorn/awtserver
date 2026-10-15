@@ -5,6 +5,7 @@
 services:
   wud:
     environment:
+      WUD_WATCHER_LOCAL_WATCHATSTART: "false"
       WUD_TRIGGER_DOCKER_UPDATES_AUTO: "true"
       WUD_TRIGGER_DOCKER_UPDATES_EVENTS: "available"
       WUD_TRIGGER_DOCKER_UPDATES_ROLLBACK: "true"

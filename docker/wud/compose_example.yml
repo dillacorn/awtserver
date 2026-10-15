@@ -12,6 +12,9 @@ services:
       TZ: America/New_York
       WUD_LOG_LEVEL: info
       WUD_SERVER_ENABLED: "false"
+      # Mandatory in WUD 9.x, even with HTTP disabled; randomly generated locally.
+      WUD_AUTH_ADMIN_USER: "admin"
+      WUD_AUTH_ADMIN_PASSWORD: "${WUD_AUTH_ADMIN_PASSWORD:?missing_local_admin_password}"
       # Strict anchored name allowlist generated from live Watchtower arguments.
       WUD_WATCHER_LOCAL_INCLUDE: "${WUD_WATCHER_LOCAL_INCLUDE:?missing_name_allowlist}"
       WUD_WATCHER_LOCAL_EXCLUDE: "^(pihole|dnsproxy-quad9|nginx-pihole|watchtower|wud)$"

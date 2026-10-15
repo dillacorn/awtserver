@@ -73,11 +73,14 @@ def normalized_files(files, directory):
     return names
 
 
-def collect_updates(names, existing):
+def collect_updates(names, existing, extend=False):
     updates = {'COMPOSE_FILE': ':'.join(names)}
     old = existing.get('COMPOSE_FILE')
     if old and old != updates['COMPOSE_FILE']:
-        raise ValueError('existing COMPOSE_FILE differs; refusing to overwrite a managed file set')
+        # Permit only explicitly requested append-only extensions. Removing or
+        # reordering existing overlays can silently break DNS networking.
+        if not extend or names[:len(old.split(':'))] != old.split(':') or len(names) <= len(old.split(':')):
+            raise ValueError('existing COMPOSE_FILE differs; refusing to overwrite a managed file set')
     if 'compose.tailscale-dns.yml' in names:
         ip = run('tailscale', 'ip', '-4').splitlines()[0].strip()
         addr = ipaddress.ip_address(ip)
@@ -99,8 +102,8 @@ def collect_updates(names, existing):
     return updates
 
 
-def preview(directory, files, existing):
-    updates = collect_updates(files, existing)
+def preview(directory, files, existing, extend=False):
+    updates = collect_updates(files, existing, extend=extend)
     env = os.environ.copy()
     # Explicit generated variables take priority for Compose validation.
     env.update(updates)
@@ -111,13 +114,22 @@ def preview(directory, files, existing):
     return updates
 
 
-def apply(directory, existing_text, updates):
+def apply(directory, existing_text, updates, extend=False):
     path = directory / '.env'
     if path.is_symlink() or (path.exists() and not path.is_file()):
         raise ValueError('refusing unusual .env file')
     existing = parse_env(existing_text)
+    replacements = {}
+    if extend and existing.get('COMPOSE_FILE') != updates['COMPOSE_FILE']:
+        old_files = existing.get('COMPOSE_FILE', '').split(':')
+        new_files = updates['COMPOSE_FILE'].split(':')
+        if old_files == [''] or new_files[:len(old_files)] != old_files or len(new_files) <= len(old_files):
+            raise ValueError('COMPOSE_FILE extension must append to the existing list')
+        replacements['COMPOSE_FILE'] = updates['COMPOSE_FILE']
+    elif existing.get('COMPOSE_FILE') not in (None, updates['COMPOSE_FILE']):
+        raise ValueError('existing COMPOSE_FILE differs; refusing to overwrite a managed file set')
     additions = [f'{key}={value}' for key, value in updates.items() if key not in existing]
-    if not additions:
+    if not additions and not replacements:
         print('Already pinned; no file changes')
         return
     if path.exists():
@@ -128,10 +140,21 @@ def apply(directory, existing_text, updates):
         os.chmod(backup, 0o600)
         print(f'Backup: {backup}')
     content = existing_text
-    if content and not content.endswith('\n'):
-        content += '\n'
-    content += '# Pinned Pi-hole Compose deployment: bare docker compose commands preserve overlays\n'
-    content += '\n'.join(additions) + '\n'
+    if replacements:
+        updated_lines = []
+        for line in content.splitlines(keepends=True):
+            match = KEY_PATTERN.match(line.rstrip('\r\n'))
+            if match and match.group(1) in replacements:
+                # Already parsed the file and refused duplicate managed keys.
+                newline = '\r\n' if line.endswith('\r\n') else ('\n' if line.endswith('\n') else '')
+                line = f'{match.group(1)}={replacements[match.group(1)]}' + newline
+            updated_lines.append(line)
+        content = ''.join(updated_lines)
+    if additions:
+        if content and not content.endswith('\n'):
+            content += '\n'
+        content += '# Pinned Pi-hole Compose deployment: bare docker compose commands preserve overlays\n'
+        content += '\n'.join(additions) + '\n'
     fd, name = tempfile.mkstemp(dir=directory, prefix='.env.pin-')
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as file:
@@ -153,6 +176,7 @@ def main():
     parser.add_argument('--container', default='pihole')
     parser.add_argument('--file', action='append', dest='files', help='Explicit ordered Compose file; repeat to specify complete set')
     parser.add_argument('--apply', action='store_true', help='Write .env after validation; never runs Compose up')
+    parser.add_argument('--extend', action='store_true', help='Explicitly allow appending overlays to a previously pinned COMPOSE_FILE; never removes or reorders files')
     args = parser.parse_args()
     directory = args.project_dir.resolve()
     if not directory.is_dir():
@@ -163,13 +187,13 @@ def main():
     existing_text = path.read_text(encoding='utf-8') if path.is_file() else ''
     existing = parse_env(existing_text)
     files = normalized_files(args.files if args.files else active_files(args.container, directory), directory)
-    updates = preview(directory, files, existing)
+    updates = preview(directory, files, existing, extend=args.extend)
     print('Validated Compose files: ' + ', '.join(files))
     print('Existing .env COMPOSE_FILE: ' + (existing.get('COMPOSE_FILE') or '(not set)'))
     if args.apply:
         if os.geteuid() != 0:
             parser.error('--apply requires root')
-        apply(directory, existing_text, updates)
+        apply(directory, existing_text, updates, extend=args.extend)
     else:
         print('CHECK ONLY: no changes made; --apply pins files without restarting anything')
 

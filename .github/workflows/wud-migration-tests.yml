@@ -1,0 +1,49 @@
+name: WUD migration validation
+
+on:
+  pull_request:
+    paths:
+      - 'docker/wud/**'
+      - '.github/workflows/wud-migration-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/wud/**'
+      - '.github/workflows/wud-migration-tests.yml'
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check staging Bash syntax
+        run: bash -n docker/wud/stage-from-watchtower.sh
+      - name: Validate staged and update-enabled Compose without credentials
+        env:
+          WUD_WATCHER_LOCAL_INCLUDE: '^(?:brave|tailscale-brave)$'
+          WUD_SMTP_FROM: example@example.org
+          WUD_SMTP_TO: recipient@example.org
+          WUD_SMTP_HOST: localhost
+          WUD_SMTP_PORT: '587'
+          WUD_SMTP_USER: example
+          WUD_SMTP_PASS: not-a-real-password
+        run: |
+          docker compose -f docker/wud/compose_example.yml config --quiet
+          docker compose -f docker/wud/compose_example.yml -f docker/wud/compose.updates.yml config --quiet
+      - name: Ensure default stage has no updater and excludes DNS by construction
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          stage = Path("docker/wud/compose_example.yml").read_text()
+          update = Path("docker/wud/compose.updates.yml").read_text()
+          script = Path("docker/wud/stage-from-watchtower.sh").read_text()
+          assert "WUD_TRIGGER_DOCKER_UPDATES_AUTO" not in stage
+          assert 'WUD_TRIGGER_SMTP_LEGACY_AUTO: "false"' in stage
+          assert 'WUD_SERVER_ENABLED: "false"' in stage
+          assert 'WUD_TRIGGER_DOCKER_UPDATES_ROLLBACK: "true"' in update
+          assert "dnsproxy-quad9" in script and "pihole" in script
+          assert "cmd[:3]" in script and "cmd[3:] != expected" in script
+          assert "WUD_WATCHER_LOCAL_INCLUDE" in stage
+          assert "- /var/run/docker.sock:/var/run/docker.sock:ro" in stage
+          print("Static stage and overlay checks passed")
+          PY

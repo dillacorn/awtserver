@@ -12,7 +12,9 @@ access tokens or server-specific authentication credentials**.
   complete reviewed 28-application allowlist, and daily 02:45 schedule.
 - Creates `/docker/wud/compose.yml` and a root-only `/docker/wud/.env`.
   SMTP credentials are inherited from the currently running Watchtower's
-  Docker environment, not from GitHub.
+  Docker environment, not from GitHub. A random 64-hex-character administrator
+  bootstrap password is generated in the private .env; WUD 9.x requires an
+  administrator even when HTTP/API are disabled.
 - WUD 9.4.1 runs without HTTP/API, with a persistent `/docker/wud/store`
   directory and no published ports.
 - WUD's name `INCLUDE` regex is anchored to exact Watchtower-selected
@@ -50,14 +52,16 @@ The script:
 1. Confirms host, current service names and the live Watchtower command.
 2. Confirms all three critical DNS containers remain running and that no
    `wud.watch=true` label bypasses the exact allowlist.
-3. Refuses to overwrite existing WUD configurations and refuses to run near
-   Watchtower's scheduled update.
+3. Refuses arbitrary WUD configuration overwrites; a failed pre-cutover image
+   pull may be safely resumed only if staged Compose and private .env match
+   exactly. Refuses to run near Watchtower's scheduled update.
 4. Writes only WUD configuration, pre-pulls the pinned WUD image, and validates
    resolved Compose before any container stop.
 5. Makes a private backup of the legacy Watchtower Compose file.
 6. Disables Watchtower's restart policy, stops/removes only its container and
-   starts WUD. An EXIT trap attempts to restore Watchtower using the original
-   Compose if WUD startup/effective-config checks fail.
+   starts WUD. It must remain running without restarts and pass its image healthcheck
+   before success is reported. An EXIT trap attempts to restore Watchtower using
+   the original Compose if WUD startup/effective-config checks fail.
 7. Confirms Pi-hole, dnsproxy and nginx-pihole container identities remained
    unchanged.
 
@@ -73,6 +77,10 @@ docker ps --filter name=wud --format 'table {{.Names}}\t{{.Status}}'
 docker logs --tail 100 wud
 docker inspect wud --format '{{.State.Running}} {{.RestartCount}}'
 ```
+
+Do not treat a momentary Docker `State.Running=true` as proof of WUD startup:
+a restart-looping container can report running briefly before crashing.
+Check `RestartCount`, image health, and logs.
 
 No source repository change proves any runtime deployment succeeded. Capture
 the host command output to confirm. If the private source SMTP password has

@@ -51,6 +51,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf -- "$tmp"' EXIT
 ref="${WUD_SOURCE_REF:-main}"
 curl -4 -fLSs --connect-timeout 8 --max-time 35 --retry 1 --retry-delay 1 \
+  --resolve raw.githubusercontent.com:443:185.199.108.133 \
   "https://raw.githubusercontent.com/dillacorn/omv-remote-dots/${ref}/docker/wud/compose_example.yml" \
   -o "$tmp/compose.yml"
 [[ -s "$tmp/compose.yml" ]] || fail "Unable to download WUD Compose"

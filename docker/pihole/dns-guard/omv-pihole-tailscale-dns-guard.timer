@@ -1,0 +1,11 @@
+[Unit]
+Description=Reconcile Pi-hole Tailscale DNS forwarding once per minute
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+AccuracySec=15s
+Unit=omv-pihole-tailscale-dns-guard.service
+
+[Install]
+WantedBy=timers.target

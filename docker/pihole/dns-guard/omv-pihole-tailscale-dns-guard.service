@@ -1,0 +1,8 @@
+[Unit]
+Description=Ensure Pi-hole DNS access over Tailscale without Docker recreation
+After=docker.service tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/omv-pihole-tailscale-dns-guard
+TimeoutStartSec=45s

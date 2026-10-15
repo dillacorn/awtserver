@@ -1,0 +1,15 @@
+# DO NOT USE until read-only WUD validation and explicit cutover.
+# Adds Docker auto-update and turns on email notifications.
+# This uses the Docker trigger rather than the Compose trigger to avoid
+# modifying files across unrelated /docker/* projects and overlay stacks.
+services:
+  wud:
+    environment:
+      WUD_TRIGGER_DOCKER_UPDATES_AUTO: "true"
+      WUD_TRIGGER_DOCKER_UPDATES_EVENTS: "available"
+      WUD_TRIGGER_DOCKER_UPDATES_ROLLBACK: "true"
+      WUD_TRIGGER_DOCKER_UPDATES_ROLLBACKWINDOW: "300000"
+      WUD_TRIGGER_DOCKER_UPDATES_ROLLBACKGRACE: "15000"
+      WUD_TRIGGER_DOCKER_UPDATES_PRUNE: "false"
+      WUD_TRIGGER_DOCKER_UPDATES_SELFUPDATE: "false"
+      WUD_TRIGGER_SMTP_LEGACY_AUTO: "true"

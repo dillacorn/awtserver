@@ -65,9 +65,26 @@ printf '[WUD 3/6] Preparing private configuration and SMTP import...\n'
 umask 077
 install -d -m 0700 /docker/wud /docker/wud/store
 if [[ -f /docker/wud/compose.yml ]]; then
-  cmp -s "$tmp/compose.yml" /docker/wud/compose.yml ||
-    fail "Staged WUD Compose differs from reviewed version; refusing to overwrite"
-  printf 'Previously staged WUD Compose verified\n'
+  if cmp -s "$tmp/compose.yml" /docker/wud/compose.yml; then
+    printf 'Previously staged WUD Compose verified\n'
+  else
+    # Accept ONLY the exact pre-auth example created by the prior migration revision.
+    python3 - "$tmp/compose.yml" /docker/wud/compose.yml <<'PY'
+from pathlib import Path
+import sys
+new = Path(sys.argv[1]).read_text()
+old = Path(sys.argv[2]).read_text()
+without_auth = ''.join(line for line in new.splitlines(keepends=True) if not (
+    line.strip().startswith('WUD_AUTH_ADMIN_USER:') or
+    line.strip().startswith('WUD_AUTH_ADMIN_PASSWORD:') or
+    line.strip().startswith('# Mandatory in WUD 9.x')
+))
+if old != without_auth:
+    sys.exit("ERROR: Staged Compose differs beyond required administrator bootstrap change")
+PY
+    install -m 0644 "$tmp/compose.yml" /docker/wud/compose.yml
+    printf 'Previously staged Compose upgraded with required WUD administrator bootstrap\n'
+  fi
 else
   install -m 0644 "$tmp/compose.yml" /docker/wud/compose.yml
 fi
@@ -75,7 +92,7 @@ fi
 # Read only from the *running* container environment. Never print SMTP secrets.
 python3 - <<'PY'
 from pathlib import Path
-import json, re, subprocess, sys
+import json, re, secrets, subprocess, sys
 w = json.loads(subprocess.check_output(["docker", "inspect", "watchtower"]))[0]
 env = dict(item.split("=", 1) for item in w["Config"]["Env"] if "=" in item)
 mapping = {
@@ -100,17 +117,25 @@ lines = ["COMPOSE_FILE='compose.yml'", "WUD_WATCHER_LOCAL_INCLUDE='" + pattern +
 lines += [key + "='" + env[src] + "'" for key, src in mapping.items()]
 path = Path("/docker/wud/.env")
 expected_content = "\n".join(lines) + "\n"
+def new_admin_line():
+    return "WUD_AUTH_ADMIN_PASSWORD='" + secrets.token_hex(32) + "'\n"
 if path.exists():
     if path.is_symlink() or not path.is_file() or path.stat().st_uid != 0 or (path.stat().st_mode & 0o777) != 0o600:
         sys.exit("ERROR: Existing WUD private env file is not a root-owned regular 0600 file")
-    if path.read_text() != expected_content:
+    current = path.read_text()
+    if current == expected_content:
+        with path.open("a") as fh:
+            fh.write(new_admin_line())
+        print("Upgraded staged SMTP configuration with private administrator bootstrap")
+    elif current.startswith(expected_content) and re.fullmatch(r"WUD_AUTH_ADMIN_PASSWORD='[0-9a-f]{64}'\n", current[len(expected_content):]):
+        print("Previously staged SMTP, allowlist and administrator bootstrap verified")
+    else:
         sys.exit("ERROR: Existing WUD private env differs from live Watchtower; refusing to overwrite")
-    print("Previously staged SMTP and allowlist verified without displaying secrets")
 else:
     with path.open("x") as fh:
-        fh.write(expected_content)
+        fh.write(expected_content + new_admin_line())
     path.chmod(0o600)
-    print("Private SMTP settings imported to /docker/wud/.env without displaying secrets")
+    print("Private SMTP settings and administrator bootstrap saved without displaying secrets")
 PY
 
 # Validate/pull WUD while Watchtower is still alive.
@@ -144,8 +169,22 @@ docker update --restart=no watchtower >/dev/null
 docker stop --time 30 watchtower >/dev/null
 docker rm watchtower >/dev/null
 (cd /docker/wud && docker compose up -d --no-deps wud)
-sleep 8
-[[ "$(docker inspect -f '{{.State.Running}}' wud)" == true ]] || fail "WUD did not remain running"
+# The Docker engine can report State.Running=true between restart-loop crashes.
+# Require WUD's image healthcheck to pass without a single restart.
+wud_ready=0
+for attempt in $(seq 1 15); do
+  read -r run_state restarts health_state < <(
+    docker inspect -f '{{.State.Status}} {{.RestartCount}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' wud
+  )
+  [[ "$run_state" == running && "$restarts" == 0 && "$health_state" != unhealthy ]] ||
+    fail "WUD startup failed (state=$run_state, restarts=$restarts, health=$health_state)"
+  if [[ "$health_state" == healthy ]]; then
+    wud_ready=1
+    break
+  fi
+  sleep 5
+done
+[[ "$wud_ready" == 1 ]] || fail "WUD healthcheck did not pass within 75 seconds"
 if docker container inspect watchtower >/dev/null 2>&1; then
   fail "Watchtower still exists after cutover"
 fi
@@ -156,6 +195,7 @@ w = json.loads(subprocess.check_output(["docker", "inspect", "wud"]))[0]
 env = dict(item.split("=", 1) for item in w["Config"]["Env"] if "=" in item)
 expected = {
     "WUD_SERVER_ENABLED": "false",
+    "WUD_AUTH_ADMIN_USER": "admin",
     "WUD_WATCHER_LOCAL_CRON": "45 2 * * *",
     "WUD_WATCHER_LOCAL_WATCHATSTART": "false",
     "WUD_WATCHER_LOCAL_WATCHEVENTS": "false",
@@ -167,7 +207,7 @@ expected = {
 for key, value in expected.items():
     if env.get(key, "").lower() != value.lower():
         sys.exit(f"ERROR: Running WUD config mismatch: {key}")
-if not env.get("WUD_TRIGGER_SMTP_LEGACY_PASS") or not env.get("WUD_WATCHER_LOCAL_INCLUDE"):
+if not env.get("WUD_TRIGGER_SMTP_LEGACY_PASS") or not env.get("WUD_WATCHER_LOCAL_INCLUDE") or not env.get("WUD_AUTH_ADMIN_PASSWORD"):
     sys.exit("ERROR: Missing private SMTP password or update allowlist")
 print("WUD settings verified: 02:45 schedule, automatic updates, rollback, SMTP, HTTP disabled")
 PY

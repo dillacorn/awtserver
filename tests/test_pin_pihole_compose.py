@@ -53,6 +53,52 @@ class PinTests(unittest.TestCase):
             pin.collect_updates(['compose.yml', 'compose.tailscale-dns.yml'],
                                 {'COMPOSE_FILE': 'compose.yml'})
 
+    def test_explicit_append_only_extension(self):
+        original = {'COMPOSE_FILE': 'compose.yml:compose.override.yml:compose.tailscale-dns.yml'}
+        with patch.dict('os.environ', {}, clear=True), patch.object(pin, 'run', return_value='100.124.11.69'):
+            values = pin.collect_updates(
+                ['compose.yml', 'compose.override.yml', 'compose.tailscale-dns.yml',
+                 'compose.ipv6-dns.yml'], original, extend=True)
+        self.assertTrue(values['COMPOSE_FILE'].endswith(':compose.ipv6-dns.yml'))
+
+    def test_extension_refuses_removal_or_reordering(self):
+        original = {'COMPOSE_FILE': 'compose.yml:compose.override.yml:compose.tailscale-dns.yml'}
+        for names in (
+            ['compose.yml', 'compose.tailscale-dns.yml', 'compose.ipv6-dns.yml'],
+            ['compose.yml', 'compose.override.yml'],
+            ['compose.yml', 'compose.override.yml', 'compose.ipv6-dns.yml',
+             'compose.tailscale-dns.yml'],
+        ):
+            with self.subTest(names=names), self.assertRaisesRegex(ValueError, 'refusing'):
+                pin.collect_updates(names, original, extend=True)
+
+    def test_extension_updates_only_compose_file_and_keeps_backup(self):
+        path = self.directory / '.env'
+        path.write_text(
+            'PASSWORD=keep_this_secret\n'
+            'COMPOSE_FILE=compose.yml:compose.override.yml:compose.tailscale-dns.yml\n'
+            'TAILSCALE_IP=100.124.11.69\n'
+        )
+        data = path.read_text()
+        updates = {
+            'COMPOSE_FILE': 'compose.yml:compose.override.yml:compose.tailscale-dns.yml:compose.ipv6-dns.yml',
+            'TAILSCALE_IP': '100.124.11.69',
+            'LAN_INTERFACE': 'enp3s0',
+            'LAN_IPV6_SUBNET': '2001:db8:1::/64',
+            'LAN_IPV6_GATEWAY': '2001:db8:1::1',
+            'PIHOLE_IPV6': '2001:db8:1::53',
+        }
+        pin.apply(self.directory, data, updates, extend=True)
+        result = path.read_text()
+        self.assertIn('PASSWORD=keep_this_secret', result)
+        self.assertEqual(result.count('COMPOSE_FILE='), 1)
+        self.assertIn('COMPOSE_FILE=' + updates['COMPOSE_FILE'], result)
+        self.assertIn('LAN_IPV6_SUBNET=2001:db8:1::/64', result)
+        self.assertEqual(len(list(self.directory.glob('.env.before-compose-pin-*'))), 1)
+        pin.apply(self.directory, result, updates, extend=True)
+        self.assertEqual(path.read_text(), result)
+        self.assertEqual(len(list(self.directory.glob('.env.before-compose-pin-*'))), 1)
+
     def test_missing_ipv6_values_rejected(self):
         with patch.dict('os.environ', {}, clear=True), patch.object(pin,'run', return_value=''):
             with self.assertRaisesRegex(ValueError, 'LAN_INTERFACE missing'):

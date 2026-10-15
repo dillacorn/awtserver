@@ -17,8 +17,9 @@ Docker update trigger. No automatic update trigger is enabled in the base Compos
 - DNS infrastructure (`pihole`, `dnsproxy-quad9`, `nginx-pihole`) and WUD
   itself are excluded. No application Compose files or labels are changed.
 - The WUD watcher runs at 02:45 America/New_York, not during SnapRAID's
-  03:45 run. Startup checks and Docker-event-driven checks are disabled to
-  avoid unplanned update events.
+  03:45 run. Staging deliberately performs a one-time startup scan for immediate validation;
+  the update overlay disables startup checks. Docker-event-driven checks stay
+  disabled, so scheduled production updates only occur during the 02:45 scan.
 - WUD watches mutable image digests, matching Watchtower's use of many
   `latest` tags.
 - The Docker trigger is preferred to WUD's Compose trigger here because the
@@ -29,7 +30,7 @@ Docker update trigger. No automatic update trigger is enabled in the base Compos
 - Rollback validates application container state/health only, not database
   reversibility, network reachability, or functionality of Tailscale sidecars.
   A new version can irreversibly migrate persistent data despite rollback.
-- WUD's API/web UI is not published to the host.
+- WUD's HTTP server/API is disabled; no host port is published.
 - Notification credentials are copied from the live Watchtower Compose into
   `/docker/wud/.env` (mode 0600); no credentials or personal addresses belong
   in this public repository.

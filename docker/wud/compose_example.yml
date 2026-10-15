@@ -1,13 +1,12 @@
-# Safe first stage: WUD monitors Watchtower's allowlist, but cannot auto-update
-# anything. No ports are published and Watchtower remains running.
-# /docker/wud/.env is generated locally and is never committed.
+# Full Watchtower replacement. No WUD HTTP/API service exposed.
+# A guarded installer generates .env privately on the OMV host.
 services:
   wud:
     image: getwud/wud:9.4.1
     container_name: wud
     restart: unless-stopped
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
       - ./store:/store
     environment:
       TZ: America/New_York
@@ -15,13 +14,22 @@ services:
       WUD_SERVER_ENABLED: "false"
       # Strict anchored name allowlist generated from live Watchtower arguments.
       WUD_WATCHER_LOCAL_INCLUDE: "${WUD_WATCHER_LOCAL_INCLUDE:?missing_name_allowlist}"
+      WUD_WATCHER_LOCAL_EXCLUDE: "^(pihole|dnsproxy-quad9|nginx-pihole|watchtower|wud)$"
       WUD_WATCHER_LOCAL_WATCHBYDEFAULT: "false"
       WUD_WATCHER_LOCAL_CRON: "45 2 * * *"
-      WUD_WATCHER_LOCAL_WATCHATSTART: "true"
+      WUD_WATCHER_LOCAL_WATCHATSTART: "false"
       WUD_WATCHER_LOCAL_WATCHEVENTS: "false"
       WUD_WATCHER_LOCAL_WATCHDIGESTDEFAULT: "true"
-      # Mail remains disabled in staging; update trigger is not present.
-      WUD_TRIGGER_SMTP_LEGACY_AUTO: "false"
+      # Auto-update on discovery, 02:45 daily. Startup and Docker events are disabled.
+      WUD_TRIGGER_DOCKER_UPDATES_AUTO: "true"
+      WUD_TRIGGER_DOCKER_UPDATES_EVENTS: "available"
+      WUD_TRIGGER_DOCKER_UPDATES_ROLLBACK: "true"
+      WUD_TRIGGER_DOCKER_UPDATES_ROLLBACKWINDOW: "300000"
+      WUD_TRIGGER_DOCKER_UPDATES_ROLLBACKGRACE: "15000"
+      WUD_TRIGGER_DOCKER_UPDATES_PRUNE: "false"
+      WUD_TRIGGER_DOCKER_UPDATES_SELFUPDATE: "false"
+      # Keep SMTP credentials out of the public repo (read from local .env).
+      WUD_TRIGGER_SMTP_LEGACY_AUTO: "true"
       WUD_TRIGGER_SMTP_LEGACY_EVENTS: "success,failure,rollback"
       WUD_TRIGGER_SMTP_LEGACY_HOST: "${WUD_SMTP_HOST:?missing_smtp_host}"
       WUD_TRIGGER_SMTP_LEGACY_PORT: "${WUD_SMTP_PORT:?missing_smtp_port}"
@@ -33,3 +41,4 @@ services:
       WUD_TRIGGER_SMTP_LEGACY_TLS_VERIFY: "true"
     labels:
       wud.watch: "false"
+      wud.trigger.exclude: "true"

@@ -18,8 +18,13 @@ done
 if docker container inspect wud >/dev/null 2>&1; then
   fail "Existing WUD container detected; aborting rather than overwriting"
 fi
-[[ ! -e /docker/wud/compose.yml && ! -e /docker/wud/.env ]] ||
-  fail "Existing WUD files detected; inspect /docker/wud before migration"
+# A previous attempt may have staged both files before an image pull failed.
+# Resume only after independently verifying the staged files match this migration.
+if [[ -e /docker/wud/compose.yml || -e /docker/wud/.env ]]; then
+  [[ -f /docker/wud/compose.yml && -f /docker/wud/.env &&
+     ! -L /docker/wud/compose.yml && ! -L /docker/wud/.env ]] ||
+    fail "Partial or symlinked WUD staging files detected; inspect /docker/wud"
+fi
 now="$(date '+%H%M')"
 if [[ "$now" > 0234 && "$now" < 0310 ]]; then
   fail "Do not migrate within Watchtower's scheduled update window"
@@ -59,7 +64,13 @@ curl -4 -fLSs --connect-timeout 8 --max-time 35 --retry 1 --retry-delay 1 \
 printf '[WUD 3/6] Preparing private configuration and SMTP import...\n'
 umask 077
 install -d -m 0700 /docker/wud /docker/wud/store
-install -m 0644 "$tmp/compose.yml" /docker/wud/compose.yml
+if [[ -f /docker/wud/compose.yml ]]; then
+  cmp -s "$tmp/compose.yml" /docker/wud/compose.yml ||
+    fail "Staged WUD Compose differs from reviewed version; refusing to overwrite"
+  printf 'Previously staged WUD Compose verified\n'
+else
+  install -m 0644 "$tmp/compose.yml" /docker/wud/compose.yml
+fi
 
 # Read only from the *running* container environment. Never print SMTP secrets.
 python3 - <<'PY'
@@ -88,15 +99,23 @@ if any(re.fullmatch(pattern, n) for n in ("pihole","dnsproxy-quad9","nginx-pihol
 lines = ["COMPOSE_FILE='compose.yml'", "WUD_WATCHER_LOCAL_INCLUDE='" + pattern + "'"]
 lines += [key + "='" + env[src] + "'" for key, src in mapping.items()]
 path = Path("/docker/wud/.env")
-with path.open("x") as fh:
-    fh.write("\n".join(lines) + "\n")
-path.chmod(0o600)
-print("Private SMTP settings imported to /docker/wud/.env without displaying secrets")
+expected_content = "\n".join(lines) + "\n"
+if path.exists():
+    if path.is_symlink() or not path.is_file() or path.stat().st_uid != 0 or (path.stat().st_mode & 0o777) != 0o600:
+        sys.exit("ERROR: Existing WUD private env file is not a root-owned regular 0600 file")
+    if path.read_text() != expected_content:
+        sys.exit("ERROR: Existing WUD private env differs from live Watchtower; refusing to overwrite")
+    print("Previously staged SMTP and allowlist verified without displaying secrets")
+else:
+    with path.open("x") as fh:
+        fh.write(expected_content)
+    path.chmod(0o600)
+    print("Private SMTP settings imported to /docker/wud/.env without displaying secrets")
 PY
 
 # Validate/pull WUD while Watchtower is still alive.
 printf '[WUD 4/6] Validating Compose and downloading WUD image; Docker pull progress will appear...\n'
-(cd /docker/wud && docker compose config --quiet && docker compose pull wud)
+(cd /docker/wud && docker compose config --quiet && timeout 150 docker compose pull wud)
 
 stamp="$(date '+%Y%m%d-%H%M%S')"
 backup="/docker/watchtower/compose.yml.before-wud-${stamp}"

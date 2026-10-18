@@ -107,8 +107,11 @@ def safe_diffs(container, spec, fullc, project):
     """Compare only safety-critical effective settings, never disclose values."""
     problems = []
     image = spec.get("image")
-    if image and image != container["Config"].get("Image"):
-        problems.append("source image reference differs from live")
+    if not image:
+        problems.append("source image reference absent")
+    # Image aliases are compared by their resolved local IMAGE ID in main().
+    # A string mismatch by itself does not imply that a recreate changes image.
+
     host_env = dict(x.split("=", 1) for x in container["Config"].get("Env", []) if "=" in x)
     service_env = spec.get("environment") or {}
     if isinstance(service_env, list):
@@ -194,11 +197,18 @@ def main():
                 print(" ", name, status, "SERVICE MISSING")
                 continue
             drift = safe_diffs(c, spec, allc, project)
-            img = docker("image", "inspect", c["Config"]["Image"], "--format", "{{.Id}}")
-            image_ok = bool(img is not None and img.returncode == 0 and
-                            img.stdout.strip() == c["Image"])
+            source_image = spec.get("image") or ""
+            source_img = (docker("image", "inspect", source_image, "--format", "{{.Id}}")
+                          if source_image else None)
+            source_image_ok = bool(source_img is not None and source_img.returncode == 0
+                                   and source_img.stdout.strip() == c["Image"])
+            ref_kind = ("same reference" if source_image == c["Config"].get("Image")
+                        else "different reference")
+            if not source_image_ok:
+                failed.append((name, "Compose would use a different/missing local image ID"))
             print(" ", name, status,
-                  "| image unchanged if recreated:", "yes" if image_ok else "NO",
+                  "| Compose source:", ref_kind,
+                  "| exact image ID preserved:", "yes" if source_image_ok else "NO",
                   "| other differences:", ", ".join(drift) or "none detected")
             if drift:
                 failed.append((name, "; ".join(drift)))

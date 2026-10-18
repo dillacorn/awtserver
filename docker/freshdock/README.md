@@ -16,7 +16,7 @@ The migration is split into two stages so a bad Compose file cannot force live a
 
 ### Stage 0: pre-cutover read-only checks
 
-`replace_wud_daemon.py` **without** `--apply` verifies the actual live WUD, SMTP, DNS and privacy state. `enroll_services.py --precutover` verifies all currently eligible Compose ownership, *live config hashes*, network dependencies, and kernel SATA state **before WUD is stopped**.
+`replace_wud_daemon.py` **without** `--apply` verifies the actual live WUD, SMTP, DNS and privacy state. `enroll_services.py --precutover` verifies all currently eligible Compose ownership, *live config hashes*, and network dependencies **before WUD is stopped**.
 
 If either fails, **do not run an apply command**; fix the reported source mismatch first.
 
@@ -35,7 +35,7 @@ If either fails, **do not run an apply command**; fix the reported source mismat
 `enroll_services.py --apply`
 
 - Stage only `compose.freshdock.yml` overlays in each reviewed active project. An overlay adds labels `freshdock.enable=true`, `freshdock.mode=nightly`, `freshdock.schedule="45 2 * * *"`, and `freshdock.notify=true`.
-- Validate effective JSON Compose configs. **Only Freshdock labels may differ** from the previous configuration. Refuse stale hashes, missing source files, unexpected network clients, SATA timeouts, or nonrunning target services.
+- Validate effective JSON Compose configs. **Only Freshdock labels may differ** from the previous configuration. Refuse stale hashes, missing source files, unexpected network clients, or nonrunning target services.
 - Recreate selected services in dependency order with `docker compose up -d --no-deps --no-build --pull never --force-recreate <service>`. No `down`, `--remove-orphans`, volume pruning, data deletion or global `watch_all`.
 - Verify each selected app is running, its labels and namespace are correct, and all non-selected existing container IDs/states are unchanged.
 - On partial failure, stop the Freshdock daemon (no unattended updates until repaired) and preserve the overlays for reconciliation.

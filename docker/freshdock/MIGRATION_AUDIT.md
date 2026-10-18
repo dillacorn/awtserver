@@ -98,3 +98,14 @@ The user ran the first missing-source discovery:
 - **Vaultwarden:** `/docker/vaultwarden/compose.yml` and `compose.override.yml` both exist. The previous script checked only the base file and reported no matching services; this does **not** establish that the combined Compose configuration is invalid. The running project includes `vaultwarden`, `nginx`, `application`, and `tailscale`. Test the pair **in that order**, requesting only `config --services`, to establish whether the combined sources contain all four.
 
 The updated `resolve_missing_compose.py` reports **individual sources and base+override pairs**. A `POSSIBLE SOURCE` result verifies service-name coverage only, **not** that the network, volume, image, environment, or data configuration is identical to the running containers. A safe production cutover still requires that comparison. No production changes have occurred.
+
+## Third live check (2026-10-18): Vaultwarden source mismatch confirmed
+
+The user ran the corrected layered Compose service-name discovery:
+
+- `/docker/rustdesk/compose.yml` defines exactly both current RustDesk services (`hbbs`, `hbbr`). Still compare full configuration before recreation.
+- `/docker/vaultwarden/compose.yml` and `compose.override.yml`, both individually and combined, define **only** `application` and `tailscale`.
+- The live Vaultwarden Compose project **also** has running `nginx` (`nginx-vaultwarden`) and `vaultwarden` (`vaultwarden`) services whose recorded `docker-compose.yml` source is missing. They may be legacy/orphaned service containers, but this is not proven.
+- **Do not** run `docker compose up`, `down`, `--remove-orphans`, recreate, or rebuild against the current Vaultwarden files. That risks interrupting the running password manager.
+
+Additional **read-only** recovery check: `docker/freshdock/vaultwarden_legacy_sources.py` searches bounded Compose/backup filenames under `/docker/vaultwarden` (excluding data and secrets directories) and tests candidate service-name definitions without showing configuration or credentials. If no matching legacy source exists, **preserve the existing running Vaultwarden and nginx containers; exclude those two from any first Freshdock cutover** until the exact configuration can be recovered or safely reconstructed in a separately approved maintenance window. No automatic update tooling should attempt to restart or change them in the interim.

@@ -114,7 +114,7 @@ class VerifiedEnrollmentTests(unittest.TestCase):
         serve = SimpleNamespace(returncode=0, stdout=json.dumps(active).encode("utf-8"))
 
         def fake_run(argv, **kwargs):
-            if argv[:3] == ["docker", "exec", "tailscale"]:
+            if argv[:3] == ["docker", "exec", "tailscale-freshrss"]:
                 if argv[3:] == ["status", "--json"]:
                     return identity
                 if argv[3:] == ["serve", "status", "--json"]:

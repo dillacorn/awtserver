@@ -132,6 +132,42 @@ class VerifiedEnrollmentTests(unittest.TestCase):
             self.assertIsNone(verified.live_tailscale_cert_domain(container))
 
 
+    def test_masked_diagnostic_does_not_reveal_web_hostname(self):
+        import diagnose_tailscale_serve as diag
+        source = {
+            "TCP": {"443": {"HTTPS": True}},
+            "Web": {"__TOKEN__:443": {"Handlers": {"/": {
+                "Proxy": "http://127.0.0.1:8080"}}}},
+            "AllowFunnel": {"__TOKEN__:443": False},
+        }
+        import json as _json
+        active = _json.loads(_json.dumps(source).replace(
+            "__TOKEN__", "test.secret-tailnet.ts.net"))
+        template = _json.loads(_json.dumps(source).replace(
+            "__TOKEN__", diag.TOKEN))
+        self.assertEqual(diag.web_key_kind(template, "test.secret-tailnet.ts.net"),
+                         "TEMPLATE")
+        self.assertEqual(diag.web_key_kind(active, "test.secret-tailnet.ts.net"),
+                         "IDENTITY")
+        self.assertEqual(diag.compare_fields(template, active,
+                                              "test.secret-tailnet.ts.net"), "MATCH")
+        active["Web"]["test.secret-tailnet.ts.net:443"]["Handlers"]["/"]["Proxy"] = "http://127.0.0.1:8081"
+        result = diag.compare_fields(template, active,
+                                     "test.secret-tailnet.ts.net")
+        self.assertEqual(result, "Web")
+        self.assertNotIn("secret-tailnet", result)
+        self.assertNotIn("8081", result)
+
+    def test_diagnostic_does_not_normalize_unverified_web_hostname(self):
+        import diagnose_tailscale_serve as diag
+        template = {"Web": {diag.TOKEN + ":443": {"Handlers": {}}},
+                    "AllowFunnel": {diag.TOKEN + ":443": False}, "TCP": {}}
+        unrelated = {"Web": {"other.tailnet.ts.net:443": {"Handlers": {}}},
+                     "AllowFunnel": {"other.tailnet.ts.net:443": False}, "TCP": {}}
+        self.assertEqual(diag.compare_fields(template, unrelated,
+                                             "real.tailnet.ts.net"),
+                         "Web,AllowFunnel")
+
     def test_unavailable_config_does_not_silently_pass(self):
         container, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")
         spec["configs"] = [{"source": "ts-serve", "target": "/config/serve.json"}]

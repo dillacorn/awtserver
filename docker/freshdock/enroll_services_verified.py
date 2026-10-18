@@ -108,7 +108,29 @@ def verify_compose_configs(container, spec, compose_tree):
                 source = tf.extractfile(entries[0])
                 actual = source.read(1024 * 1024 + 1) if source else b""
                 if actual != expected:
-                    issues.append("running config bytes differ from Compose source")
+                    try:
+                        live_json = json.loads(actual)
+                        source_json = json.loads(expected)
+                    except (UnicodeError, ValueError):
+                        issues.append("running config differs; one or both are not valid JSON")
+                        continue
+                    if live_json == source_json:
+                        # JSON indentation, member order and trailing whitespace
+                        # have no semantic effect. Never ignore altered values.
+                        continue
+                    if (isinstance(live_json, dict) and
+                            isinstance(source_json, dict) and
+                            set(live_json) != set(source_json)):
+                        issues.append("running config JSON top-level keys differ")
+                    elif (isinstance(live_json, dict) and
+                          isinstance(source_json, dict) and
+                          "Web" in live_json and "Web" in source_json and
+                          isinstance(live_json["Web"], dict) and
+                          isinstance(source_json["Web"], dict) and
+                          set(live_json["Web"]) != set(source_json["Web"])):
+                        issues.append("running config JSON Web hostname keys differ")
+                    else:
+                        issues.append("running config JSON values differ")
         except (OSError, subprocess.TimeoutExpired, tarfile.TarError, EOFError):
             issues.append("running config cannot be safely compared")
     return issues

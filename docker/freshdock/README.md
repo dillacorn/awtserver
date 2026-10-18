@@ -52,6 +52,32 @@ docker compose -p PROJECT --project-directory /docker/PROJECT \
 
 Include only the base/override files actually present. Otherwise a future Compose recreation can drop Freshdock labels.
 
+## Progressive migration when original Compose hashes have drifted
+
+**Do not rerun the full two-stage command when the read-only enrollment gate
+reports `current Compose file hash differs from live container`.** That result
+comes from an already-existing difference between the running Compose metadata
+and the current source file, not from Freshdock.
+
+The WUD daemon can be replaced independently via
+`replace_wud_daemon.py --apply --compose /path/to/verified/compose.yml`.
+This step does **not** recreate any application or change its image, network or
+mounts. It leaves the selected application list in
+`/docker/freshdock/selected.json`, and a strict opt-in Freshdock scheduler
+running without enrolled update targets. WUD is removed only after Freshdock
+starts and reports its SMTP notifier.
+
+Then run `audit_enrollment.py` **once**. It reports every selected app's
+stored-vs-effective Compose hash, local image consistency, environment drift
+(count only), bind mounts, network parent ID and restart policy without
+printing secret values. It does not stop at the first mismatch, change any
+container, or reveal private Compose/environment details.
+
+Do **not** automatically relax hash checks to force a 21-container recreation.
+Investigate the complete inventory, reconcile live configuration for the affected
+services, and then run the enrollment stage in one reviewed pass. WUD daemon
+replacement and service update enrollment are separate verifiable states.
+
 ## Five intentionally excluded containers
 
 | Container | Why not automatically enrolled yet |

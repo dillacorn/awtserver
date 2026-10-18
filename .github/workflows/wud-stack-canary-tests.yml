@@ -1,0 +1,24 @@
+name: WUD stack canary safety checks
+
+on:
+  pull_request:
+    paths:
+      - 'docker/wud/wud_stack_canary.py'
+      - 'tests/test_wud_stack_canary.py'
+      - '.github/workflows/wud-stack-canary-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/wud/wud_stack_canary.py'
+      - 'tests/test_wud_stack_canary.py'
+      - '.github/workflows/wud-stack-canary-tests.yml'
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Python syntax
+        run: python3 -m py_compile docker/wud/wud_stack_canary.py tests/test_wud_stack_canary.py
+      - name: Test fail-closed canary safeguards
+        run: python3 -m unittest discover -s tests -p 'test_wud_stack_canary.py' -v

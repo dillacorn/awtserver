@@ -5,12 +5,14 @@ on:
     paths:
       - 'docker/freshdock/**'
       - 'tests/test_freshdock_stack_canary.py'
+      - 'tests/test_freshdock_auto_canary.py'
       - '.github/workflows/freshdock-stack-canary-tests.yml'
   push:
     branches: [main]
     paths:
       - 'docker/freshdock/**'
       - 'tests/test_freshdock_stack_canary.py'
+      - 'tests/test_freshdock_auto_canary.py'
       - '.github/workflows/freshdock-stack-canary-tests.yml'
 
 jobs:
@@ -19,6 +21,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check syntax
-        run: python3 -m py_compile docker/freshdock/freshdock_stack_canary.py tests/test_freshdock_stack_canary.py
+        run: python3 -m py_compile docker/freshdock/*.py tests/test_freshdock_*canary.py
       - name: Validate preflight and isolated network configuration
-        run: python3 -m unittest discover -s tests -p 'test_freshdock_stack_canary.py' -v
+        run: python3 -m unittest discover -s tests -p 'test_freshdock_*canary.py' -v

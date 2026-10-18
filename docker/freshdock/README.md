@@ -156,7 +156,7 @@ Compose `configs.content` value. Capability strings `CAP_NET_ADMIN` and
 `NET_ADMIN` are treated as equivalent (same for `NET_RAW`).
 
 For JSON configs, equivalent parsed JSON data may differ in formatting,
-whitespace or member order. **Tailscale also expands `\u0024{TS_CERT_DOMAIN}`**
+whitespace or member order. **Tailscale also expands `${TS_CERT_DOMAIN}`**
 to its node's actual FQDN when applying the Serve configuration. When the
 template contains that placeholder, the preflight gets the DNSName from the
 *running sidecar's own* `tailscale status --json`, resolves the placeholder and

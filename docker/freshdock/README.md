@@ -161,6 +161,11 @@ to its node's actual FQDN when applying the Serve configuration. When the
 template contains that placeholder, the preflight gets the DNSName from the
 *running sidecar's own* `tailscale status --json`, resolves the placeholder and
 requires the **entire parsed JSON document** to match the live config.
-A different hostname, HTTP proxy, Funnel setting, or JSON value blocks
+The live diagnostic confirmed one additional Compose-escaping stage for all nine
+sidecars: the effective Compose config retains the double-escaped
+`${TS_CERT_DOMAIN}`, the mounted file contains `${TS_CERT_DOMAIN}`, and
+active Serve uses the authenticated FQDN. The enrollment preflight validates
+**both transitions** and all remaining JSON fields against live state. A
+different hostname, HTTP proxy, Funnel setting, or JSON value blocks
 enrollment; no service config contents or credentials are printed. No files
 in the running containers are modified by the preflight.

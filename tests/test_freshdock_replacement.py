@@ -95,6 +95,14 @@ class MigrationTests(unittest.TestCase):
         self.assertIn('triggers = ["succeeded", "failed"]', result)
         self.assertIn('password = "sensitive-secret"', result)
 
+
+    def test_enrollment_is_scoped_to_compose_and_docker(self):
+        source = (ROOT / "enroll_services.py").read_text()
+        self.assertNotIn("journalctl", source)
+        self.assertNotIn("smartctl", source)
+        self.assertIn("config-hash", source)
+        self.assertIn("verify_network", source)
+
     def test_daemon_preflight_wrong_host_creates_nothing(self):
         with patch.object(stage1.os, "geteuid", return_value=0), \
              patch.object(stage1.socket, "gethostname", return_value="wrong"), \

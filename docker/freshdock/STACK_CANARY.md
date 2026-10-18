@@ -39,3 +39,49 @@ Upstream references:
 - https://github.com/Turbootzz/freshdock/blob/main/src/docker/recreate.rs
 
 Related: #8, WUD failed canary in PR #9.
+
+
+## Next tests: actual automatic update and health-gated rollback
+
+The successful initial test used a manual `freshdock recreate`. A separate
+`freshdock_auto_canary.py` now tests the actual Freshdock scheduler:
+
+```bash
+python3 docker/freshdock/freshdock_auto_canary.py
+python3 docker/freshdock/freshdock_auto_canary.py --all
+```
+
+The default command performs preflight only. `--all` runs two independent
+disposable Compose projects:
+
+1. **Automatic update:** Freshdock 1.7.1 `run --interval 5 --tick 2`
+   discovers an upstream digest change for `alpine:3.20`, pulls the current
+   image and updates the parent. It must automatically recreate the unlabelled
+   network-dependent child onto the parent's new Docker namespace.
+2. **Rollback:** The old parent passes a synthetic healthcheck that recognizes
+   Alpine `3.20.0`, while the updated `alpine:3.20` fails. Freshdock must
+   restore the original parent, reattach the child, and report the rollback.
+
+The test uses a temporary local tag `alpine:3.20` pointed at the old
+`alpine:3.20.0` image. **It refuses to start if the `alpine:3.20` tag is
+already present or referenced by any existing container.** Each test stage
+removes only the tag it created, after removing the disposable Compose stack.
+The latest upstream `alpine:3.20` must have a different digest from
+`alpine:3.20.0` for meaningful results. External image pulls during the
+test could interfere; the script checks original container identities but
+cannot prevent unrelated concurrent activity.
+
+The scheduler is restricted to the lone disposable parent by Freshdock's
+opt-in labels. Production WUD remains running and its exact watcher filter
+must exclude the temporary names. Existing opt-in Freshdock/Watchtower labels
+cause an immediate refusal to avoid accidentally updating other containers.
+No production container is intentionally recreated or unpaused.
+
+For focused reruns, use `--automatic` or `--rollback`; `--all` is the full
+validation. Automatic rollback may take over two minutes due to Freshdock's
+health timeout. The test has finite runtime and performs best-effort cleanup
+on ordinary errors.
+
+**Neither test exercises a real Gluetun VPN kill switch or SMTP notification.**
+Passing both provides stronger evidence for scheduler reliability but does not
+authorize production migration.

@@ -38,7 +38,7 @@ def fake_docker(args, **kwargs):
 
 class SafetyTests(unittest.TestCase):
     def test_uses_pinned_freshdock_and_separate_old_and_moving_images(self):
-        self.assertEqual(canary.FRESHDOCk_IMAGE,
+        self.assertEqual(canary.FRESHDOCK_IMAGE,
                          "ghcr.io/turbootzz/freshdock:1.7.1")
         self.assertEqual(canary.OLD_IMAGE, "alpine:3.20.0")
         self.assertEqual(canary.MOVING_TAG, "alpine:3.20")

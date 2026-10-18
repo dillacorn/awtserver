@@ -1,6 +1,7 @@
 """Offline guards for verified full-project Freshdock enrollment."""
 import copy
 import io
+import json
 import tarfile
 from types import SimpleNamespace
 import sys
@@ -82,6 +83,54 @@ class VerifiedEnrollmentTests(unittest.TestCase):
             tree["configs"]["ts-serve"]["content"] = original.decode()
             args = runner.call_args.args[0]
             self.assertEqual(args, ["docker", "cp", "tailscale:/config/serve.json", "-"])
+
+    def test_tailscale_serves_runtime_hostname_from_its_identity(self):
+        template = {
+            "TCP": {"443": {"HTTPS": True}},
+            "Web": {"${TS_CERT_DOMAIN}:443": {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8090"}}}},
+            "AllowFunnel": {"${TS_CERT_DOMAIN}:443": False},
+        }
+        domain = "demo.tailnet.ts.net"
+        live_config = json.loads(json.dumps(template).replace("${TS_CERT_DOMAIN}", domain))
+        contents = json.dumps(live_config).encode("utf-8")
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode="w") as archive:
+            entry = tarfile.TarInfo(name="serve.json")
+            entry.size = len(contents)
+            archive.addfile(entry, io.BytesIO(contents))
+        runtime_file = SimpleNamespace(returncode=0, stdout=stream.getvalue())
+        identity = SimpleNamespace(returncode=0, stdout=json.dumps(
+            {"Self": {"DNSName": domain + "."}}).encode("utf-8"))
+        def fake_run(argv, **kwargs):
+            if argv[:3] == ["docker", "exec", "tailscale"]:
+                return identity
+            if argv[:3] == ["docker", "cp", "tailscale:/config/serve.json"]:
+                return runtime_file
+            raise AssertionError("Unexpected command")
+        container, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")
+        spec["configs"] = [{"source": "ts-serve", "target": "/config/serve.json"}]
+        tree = {"configs": {"ts-serve": {"content": json.dumps(template)}}}
+        with patch.object(verified.subprocess, "run", side_effect=fake_run):
+            self.assertEqual(
+                verified.validate_runtime(container, spec, {}, "proj", tree), [])
+            # An unrelated or stale identity must never authorize a changed Web key.
+            identity.stdout = json.dumps({"Self": {"DNSName": "other.tailnet.ts.net."}}).encode()
+            self.assertIn("Tailscale config differs after verified hostname substitution",
+                          verified.validate_runtime(container, spec, {}, "proj", tree))
+            identity.stdout = json.dumps({"Self": {"DNSName": domain + "."}}).encode()
+            tree["configs"]["ts-serve"]["content"] = json.dumps({
+                **template, "TCP": {"443": {"HTTPS": False}}})
+            self.assertIn("Tailscale config differs after verified hostname substitution",
+                          verified.validate_runtime(container, spec, {}, "proj", tree))
+
+    def test_tailscale_invalid_identity_is_not_accepted(self):
+        container, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")
+        with patch.object(verified.subprocess, "run",
+                          return_value=SimpleNamespace(
+                              returncode=0,
+                              stdout=b'{"Self":{"DNSName":"not/a/domain"}}')):
+            self.assertIsNone(verified.live_tailscale_cert_domain(container))
+
 
     def test_unavailable_config_does_not_silently_pass(self):
         container, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")

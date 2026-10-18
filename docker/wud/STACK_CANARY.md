@@ -8,9 +8,7 @@ containers: a parent on its own network and a child using
 `alpine:3.20.10` to a newer published semver tag. The test then checks whether
 the child is **still running in the newly created parent's namespace**.
 
-**Do not run while the October 18 SATA/SnapRAID incident or Transmission's stale
-Gluetun namespace remains unresolved.** The script checks these conditions and
-refuses to create anything if it detects them.
+**This disposable test can run while production Transmission is paused or SnapRAID is still stalled.** It does not touch those services or require an operational Gluetun namespace. However, Docker image pulls and container operations perform disk I/O, so an unhealthy disk or Docker daemon may cause errors or timeouts. The canary does not attempt hardware or production service recovery.
 
 ## Read-only preflight
 
@@ -31,10 +29,9 @@ network, WUD instance, SMTP settings or images are intentionally modified.
 The test DOES pull small Alpine images, create an isolated Compose network and
 two disposable containers, and start a second temporary WUD container with
 access to Docker's socket. The temporary WUD watcher has an exact-name filter
-and no exposed HTTP port or mail trigger. Strict preflights check production
-WUD settings, label overrides, Compose identities, paused apps, Gluetun
-namespace, active SnapRAID, recent `ata13/sdb` disk errors and the maintenance
-window. The test cleans up its randomly named project after completion, even
+and no exposed HTTP port or mail trigger. Strict preflights check production WUD settings, watcher label overrides,
+canary name collisions, and the maintenance window; they do **not** require
+healthy production applications or an idle SnapRAID scrub. The test cleans up its randomly named project after completion, even
 on an ordinary test exception; if cleanup fails it reports the project name.
 
 **Results:**

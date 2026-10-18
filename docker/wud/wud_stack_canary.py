@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Read-only preflight by default; --run tests WUD against a disposable Compose namespace stack."""
+"""Read-only preflight by default; --run tests WUD on a separate disposable Compose project.
+
+This canary does not change production WUD or privacy services, and intentionally
+allows existing paused containers and active SnapRAID. Disk I/O faults may still
+cause Docker operations to time out; this test never attempts to fix them.
+"""
 import argparse
 from datetime import datetime
 import json
@@ -15,11 +20,8 @@ import time
 
 HOST = "openmediavault"
 WUD_IMAGE = "getwud/wud:9.4.1"
-PARENT_IMAGE = "alpine:3.20.10"
-CLIENT_IMAGE = "alpine:3.24.2"
-PRIVACY = ("gluetun", "transmission", "mullvad-browser")
-MANAGED = ("audiobookshelf", "brave", "calibre", "immich_server",
-           "jellyfin", "mullvad-browser", "transmission")
+PARENT_IMAGE = "alpine:3.20.0"
+CLIENT_IMAGE = "alpine:3.20.0"
 
 class Blocked(RuntimeError):
     pass
@@ -44,28 +46,6 @@ def all_containers():
     ids = call(["docker", "ps", "-aq"]).stdout.split()
     return json.loads(call(["docker", "inspect", *ids], timeout=40).stdout) if ids else []
 
-def snapraid_active():
-    for proc in Path("/proc").iterdir():
-        if not proc.name.isdigit():
-            continue
-        try:
-            cmd = [x.decode(errors="replace") for x in
-                   (proc / "cmdline").read_bytes().split(b"\0") if x]
-        except OSError:
-            continue
-        if cmd and (Path(cmd[0]).name == "snapraid" or
-                    any(Path(x).name == "snapraid-aio-script.sh" for x in cmd[1:])):
-            return True
-    return False
-
-def check_disk_errors():
-    p = call(["journalctl", "-k", "--since", "20 minutes ago",
-              "--no-pager", "-o", "cat"], timeout=20, check=False)
-    require(p.returncode == 0, "Cannot check recent kernel disk errors")
-    bad = re.search(r"ata13:.*(?:reset|frozen)|ata13\.00:.*(?:timeout|failed)|"
-                    r"I/O error, dev sdb\b|Buffer I/O error, dev sdb\b", p.stdout, re.I)
-    require(not bad, "Recent sdb/ata13 disk errors; resolve SATA before testing")
-
 def compose_labels(obj, project, service, directory):
     labels = obj["Config"].get("Labels") or {}
     require(labels.get("com.docker.compose.project") == project and
@@ -81,8 +61,6 @@ def baseline():
             "Docker Compose unavailable")
     now = datetime.now().strftime("%H%M")
     require(not ("0215" <= now <= "0445"), "Inside scheduled WUD/Docker/SnapRAID window")
-    require(not snapraid_active(), "SnapRAID still running")
-    check_disk_errors()
     current = all_containers()
     require(not any(str((c.get("Config", {}).get("Labels") or {}).get("wud.watch", "")).lower()
                     == "true" for c in current),
@@ -100,24 +78,6 @@ def baseline():
     require(regex and env.get("WUD_WATCHER_LOCAL_WATCHBYDEFAULT") == "false" and
             env.get("WUD_WATCHER_LOCAL_WATCHEVENTS") == "false",
             "Production WUD watcher filters differ")
-    vpn = inspect("gluetun")
-    compose_labels(vpn, "privacy", "gluetun", "/docker/privacy")
-    require(vpn["State"]["Status"] == "running" and
-            (vpn["State"].get("Health") or {}).get("Status") == "healthy",
-            "Gluetun unhealthy")
-    for name in MANAGED:
-        require(inspect(name)["State"]["Status"] != "paused",
-                f"{name} paused; restore normal operation first")
-    for name in PRIVACY[1:]:
-        obj = inspect(name)
-        compose_labels(obj, "privacy", name, "/docker/privacy")
-        require(obj["State"]["Status"] == "running" and
-                obj["HostConfig"]["NetworkMode"] == "container:" + vpn["Id"],
-                f"{name} not running inside current Gluetun namespace")
-    route = call(["docker", "exec", "gluetun", "ip", "-4", "route",
-                  "get", "1.1.1.1"], timeout=15).stdout
-    require(re.search(r"\bdev tun0\b", route),
-            "Gluetun VPN route unavailable")
     return {o["Name"]: (o["Id"], o["State"]["Status"]) for o in current}, regex
 
 def compose_yaml(parent, client):

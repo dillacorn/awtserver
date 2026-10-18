@@ -1,0 +1,27 @@
+name: Privacy VPN updater checks
+
+on:
+  pull_request:
+    paths:
+      - 'docker/privacy/auto_update.py'
+      - 'docker/privacy/activate_auto_update.py'
+      - 'docker/privacy/AUTO_UPDATE.md'
+      - 'tests/test_privacy_auto_update.py'
+      - '.github/workflows/privacy-auto-update-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/privacy/auto_update.py'
+      - 'docker/privacy/activate_auto_update.py'
+      - 'tests/test_privacy_auto_update.py'
+      - '.github/workflows/privacy-auto-update-tests.yml'
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Python source
+        run: python3 -m py_compile docker/privacy/auto_update.py docker/privacy/activate_auto_update.py
+      - name: Simulate safety gates and update failure paths
+        run: python3 -m unittest discover -s tests -p 'test_privacy_auto_update.py' -v

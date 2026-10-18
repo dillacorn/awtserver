@@ -21,7 +21,7 @@ CANDIDATES = re.compile(
     re.IGNORECASE,
 )
 SKIP_DIRS = {"vw-data", "data", "ts", "state", "config", "cache", "log",
-             "logs", "backup", "backups", ".git", "certs", "node_modules"}
+             "logs", ".git", "certs", "node_modules"}
 
 
 def command(args, timeout=25):

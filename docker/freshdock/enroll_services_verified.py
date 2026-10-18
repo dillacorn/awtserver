@@ -98,35 +98,54 @@ def live_tailscale_cert_domain(container):
         return None
 
 
-def verify_compose_configs(container, spec, compose_tree):
-    """Confirm actual mounted config content matches the resolved Compose source.
+def serve_config_with_key(source, from_key, to_key):
+    """Replace *only* a verified Serve hostname key; retain all Serve values.
 
-    Docker Compose injects config resources as files in the container. Compare
-    the exact bytes through read-only 'docker cp' without printing file content.
-    Reject any non-inline config source rather than assuming it is equivalent.
+    Do not rewrite arbitrary strings, proxy targets, TLS policy, or Funnel flags.
+    A malformed or unexpected Web/AllowFunnel mapping is never accepted.
+    """
+    if not isinstance(source, dict):
+        return None
+    result = copy.deepcopy(source)
+    for field in ("Web", "AllowFunnel"):
+        mapping = result.get(field)
+        if not isinstance(mapping, dict) or set(mapping) != {from_key}:
+            return None
+        result[field] = {to_key: mapping[from_key]}
+    return result
+
+
+def verify_compose_configs(container, spec, compose_tree):
+    """Compare three distinct Tailscale representations without leaking values.
+
+    The rendered Compose config can retain the double-escaped placeholder,
+    while a mounted file has a literal single-dollar placeholder and running
+    Tailscale Serve uses the node's actual FQDN. Require exact semantic data
+    at *both* transitions. Other configs require byte or JSON equivalence.
     """
     issues = []
     declared = spec.get("configs") or []
     catalog = (compose_tree or {}).get("configs") or {}
+    name = container["Name"].removeprefix("/")
+    token = "$" + "{TS_CERT_DOMAIN}"
     for item in declared:
         if not isinstance(item, dict) or not item.get("source"):
             issues.append("config declaration format unverified")
             continue
-        name = item["source"]
-        target = item.get("target") or "/" + name
-        definition = catalog.get(name)
+        source_name = item["source"]
+        target = item.get("target") or "/" + source_name
+        definition = catalog.get(source_name)
         if (not isinstance(definition, dict) or
                 not isinstance(definition.get("content"), str)):
-            issues.append("config source cannot be verified byte-for-byte")
+            issues.append("config source cannot be verified")
             continue
-        expected = definition["content"].encode("utf-8")
-        if len(expected) > 1024 * 1024 or not str(target).startswith("/"):
+        raw_expected = definition["content"].encode("utf-8")
+        if len(raw_expected) > 1024 * 1024 or not str(target).startswith("/"):
             issues.append("config size/path outside verification scope")
             continue
         try:
             result = subprocess.run(
-                ["docker", "cp",
-                 container["Name"].removeprefix("/") + ":" + target, "-"],
+                ["docker", "cp", name + ":" + target, "-"],
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                 timeout=20, check=False)
             if result.returncode or len(result.stdout) > 2 * 1024 * 1024:
@@ -134,58 +153,82 @@ def verify_compose_configs(container, spec, compose_tree):
                 continue
             with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:*") as tf:
                 entries = [x for x in tf.getmembers() if x.isfile()]
-                if len(entries) != 1:
-                    issues.append("running config is not one regular file")
+                if len(entries) != 1 or entries[0].size > 1024 * 1024:
+                    issues.append("running config is not one small regular file")
                     continue
-                source = tf.extractfile(entries[0])
-                actual = source.read(1024 * 1024 + 1) if source else b""
-                if actual != expected:
-                    try:
-                        live_json = json.loads(actual)
-                        source_json = json.loads(expected)
-                    except (UnicodeError, ValueError):
-                        issues.append("running config differs; one or both are not valid JSON")
-                        continue
-                    if live_json == source_json:
-                        # JSON indentation, member order and trailing whitespace
-                        # have no semantic effect. Never ignore altered values.
-                        continue
-                    # Tailscale containerboot substitutes ${TS_CERT_DOMAIN}
-                    # from its OWN authenticated node identity when applying
-                    # TS_SERVE_CONFIG; current Compose may still hold a template.
-                    # Require whole-object equivalence after substitution.
-                    if "${TS_CERT_DOMAIN}" in definition["content"]:
-                        domain = live_tailscale_cert_domain(container)
-                        if domain is None:
-                            issues.append("Tailscale DNS identity unavailable")
-                            continue
-                        rendered = definition["content"].replace(
-                            "${TS_CERT_DOMAIN}", domain)
-                        try:
-                            if json.loads(rendered) == live_json:
-                                continue
-                        except (UnicodeError, ValueError):
-                            issues.append("rendered Tailscale config is not valid JSON")
-                            continue
-                        issues.append("Tailscale config differs after verified hostname substitution")
-                        continue
-                    if (isinstance(live_json, dict) and
-                            isinstance(source_json, dict) and
-                            set(live_json) != set(source_json)):
-                        issues.append("running config JSON top-level keys differ")
-                    elif (isinstance(live_json, dict) and
-                          isinstance(source_json, dict) and
-                          "Web" in live_json and "Web" in source_json and
-                          isinstance(live_json["Web"], dict) and
-                          isinstance(source_json["Web"], dict) and
-                          set(live_json["Web"]) != set(source_json["Web"])):
-                        issues.append("running config JSON Web hostname keys differ")
-                    else:
-                        issues.append("running config JSON values differ")
+                file_obj = tf.extractfile(entries[0])
+                actual = file_obj.read(1024 * 1024 + 1) if file_obj else b""
         except (OSError, subprocess.TimeoutExpired, tarfile.TarError, EOFError):
             issues.append("running config cannot be safely compared")
-    return issues
+            continue
+        if actual == raw_expected:
+            continue
+        try:
+            mounted_json = json.loads(actual)
+            source_json = json.loads(raw_expected)
+        except (UnicodeError, ValueError):
+            issues.append("running config differs; one or both are not JSON")
+            continue
+        if mounted_json == source_json:
+            continue
 
+        # Only the nine already-audited Tailscale Serve sidecars may have the
+        # known exact template lifecycle. The diagnostic confirmed all nine:
+        # Compose '$' + token -> mounted token -> active authenticated FQDN.
+        audited_sidecar = name in {
+            "tailscale-audiobookshelf", "tailscale-brave",
+            "tailscale-dockge", "tailscale-flame", "tailscale-freshrss",
+            "tailscale-jellyfin", "tailscale-jellyseerr",
+            "tailscale-navidrome", "tailscale-ntfy",
+        }
+        compose_double = "$" + token + ":443"
+        mounted_single = token + ":443"
+        if audited_sidecar and source_name == "ts-serve":
+            expected_mounted = serve_config_with_key(
+                source_json, compose_double, mounted_single)
+            if expected_mounted is None or mounted_json != expected_mounted:
+                issues.append("mounted Tailscale config differs from reviewed template")
+                continue
+            domain = live_tailscale_cert_domain(container)
+            if not domain:
+                issues.append("Tailscale DNS identity unavailable")
+                continue
+            expected_active = serve_config_with_key(
+                mounted_json, mounted_single, domain + ":443")
+            if expected_active is None:
+                issues.append("mounted Tailscale config has unexpected host mapping")
+                continue
+            try:
+                status = subprocess.run(
+                    ["docker", "exec", name, "tailscale",
+                     "serve", "status", "--json"],
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    timeout=25, check=False)
+                if status.returncode != 0 or len(status.stdout) > 4 * 1024 * 1024:
+                    issues.append("active Tailscale Serve status unavailable")
+                    continue
+                active_json = json.loads(status.stdout)
+            except (OSError, subprocess.TimeoutExpired, ValueError):
+                issues.append("active Tailscale Serve config unverified")
+                continue
+            if active_json != expected_active:
+                issues.append("active Tailscale Serve differs from mounted template")
+            continue
+
+        if (isinstance(mounted_json, dict) and
+                isinstance(source_json, dict) and
+                set(mounted_json) != set(source_json)):
+            issues.append("running config JSON top-level keys differ")
+        elif (isinstance(mounted_json, dict) and
+              isinstance(source_json, dict) and
+              "Web" in mounted_json and "Web" in source_json and
+              isinstance(mounted_json["Web"], dict) and
+              isinstance(source_json["Web"], dict) and
+              set(mounted_json["Web"]) != set(source_json["Web"])):
+            issues.append("running config JSON Web hostname keys differ")
+        else:
+            issues.append("running config JSON values differ")
+    return issues
 
 def validate_runtime(container, spec, allc, project, compose_tree=None):
     name = container["Name"].removeprefix("/")

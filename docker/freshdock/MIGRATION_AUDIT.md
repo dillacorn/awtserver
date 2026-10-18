@@ -89,3 +89,12 @@ validation is reported as unverified, not interpreted as absence of a service.
 If the missing files cannot be found or parsed, preserve these four services in
 place during any initial migration rather than reconstructing their configuration
 from container inspect alone.
+
+## Second Compose source check (2026-10-18)
+
+The user ran the first missing-source discovery:
+
+- **RustDesk:** `/docker/rustdesk/compose.yml` exists and declares both `hbbs` and `hbbr` (the current recorded `docker-compose.yml` file is missing). Treat this as a plausible replacement source, but review the resolved configuration against running containers before any recreate.
+- **Vaultwarden:** `/docker/vaultwarden/compose.yml` and `compose.override.yml` both exist. The previous script checked only the base file and reported no matching services; this does **not** establish that the combined Compose configuration is invalid. The running project includes `vaultwarden`, `nginx`, `application`, and `tailscale`. Test the pair **in that order**, requesting only `config --services`, to establish whether the combined sources contain all four.
+
+The updated `resolve_missing_compose.py` reports **individual sources and base+override pairs**. A `POSSIBLE SOURCE` result verifies service-name coverage only, **not** that the network, volume, image, environment, or data configuration is identical to the running containers. A safe production cutover still requires that comparison. No production changes have occurred.

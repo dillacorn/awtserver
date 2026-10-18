@@ -8,6 +8,9 @@ Gluetun/VPN, paused Transmission or legacy Vaultwarden services.
 """
 import argparse
 import copy
+import io
+import subprocess
+import tarfile
 from datetime import datetime
 import json
 import os
@@ -57,7 +60,61 @@ def inspect_policy(c):
     return c.get("Config", {}).get("Labels") or {}
 
 
-def validate_runtime(container, spec, allc, project):
+def normalized_caps(values):
+    # Docker accepts CAP_NET_ADMIN and NET_ADMIN as equivalent capabilities.
+    # Compare canonical names rather than Docker Engine/Compose formatting.
+    return {str(cap).upper().removeprefix("CAP_") for cap in (values or [])}
+
+
+def verify_compose_configs(container, spec, compose_tree):
+    """Confirm actual mounted config content matches the resolved Compose source.
+
+    Docker Compose injects config resources as files in the container. Compare
+    the exact bytes through read-only 'docker cp' without printing file content.
+    Reject any non-inline config source rather than assuming it is equivalent.
+    """
+    issues = []
+    declared = spec.get("configs") or []
+    catalog = (compose_tree or {}).get("configs") or {}
+    for item in declared:
+        if not isinstance(item, dict) or not item.get("source"):
+            issues.append("config declaration format unverified")
+            continue
+        name = item["source"]
+        target = item.get("target") or "/" + name
+        definition = catalog.get(name)
+        if (not isinstance(definition, dict) or
+                not isinstance(definition.get("content"), str)):
+            issues.append("config source cannot be verified byte-for-byte")
+            continue
+        expected = definition["content"].encode("utf-8")
+        if len(expected) > 1024 * 1024 or not str(target).startswith("/"):
+            issues.append("config size/path outside verification scope")
+            continue
+        try:
+            result = subprocess.run(
+                ["docker", "cp",
+                 container["Name"].removeprefix("/") + ":" + target, "-"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                timeout=20, check=False)
+            if result.returncode or len(result.stdout) > 2 * 1024 * 1024:
+                issues.append("running config file inaccessible")
+                continue
+            with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:*") as tf:
+                entries = [x for x in tf.getmembers() if x.isfile()]
+                if len(entries) != 1:
+                    issues.append("running config is not one regular file")
+                    continue
+                source = tf.extractfile(entries[0])
+                actual = source.read(1024 * 1024 + 1) if source else b""
+                if actual != expected:
+                    issues.append("running config bytes differ from Compose source")
+        except (OSError, subprocess.TimeoutExpired, tarfile.TarError, EOFError):
+            issues.append("running config cannot be safely compared")
+    return issues
+
+
+def validate_runtime(container, spec, allc, project, compose_tree=None):
     name = container["Name"].removeprefix("/")
     drift = audit.safe_diffs(container, spec, allc, project)
     # The two reviewed source-image differences are restored to their EXACT
@@ -80,11 +137,12 @@ def validate_runtime(container, spec, allc, project):
                           ("init", "Init")):
         if key in spec and bool(spec[key]) != bool(host.get(live_key)):
             drift.append(f"{key} differs")
-    for key, live_key in (("cap_add", "CapAdd"), ("cap_drop", "CapDrop"),
-                          ("security_opt", "SecurityOpt")):
-        if key in spec:
-            if sorted(spec[key] or []) != sorted(host.get(live_key) or []):
-                drift.append(f"{key} differs")
+    for key, live_key in (("cap_add", "CapAdd"), ("cap_drop", "CapDrop")):
+        if key in spec and normalized_caps(spec[key]) != normalized_caps(host.get(live_key)):
+            drift.append(f"{key} differs")
+    if "security_opt" in spec and sorted(spec["security_opt"] or []) != sorted(
+            host.get("SecurityOpt") or []):
+        drift.append("security_opt differs")
     if "command" in spec:
         desired = spec.get("command")
         actual = config.get("Cmd")
@@ -137,9 +195,14 @@ def validate_runtime(container, spec, allc, project):
             break
     # Exposed settings which the audit cannot safely/reliably compare are
     # blocked rather than considered equivalent.
-    for key in ("secrets", "configs", "develop", "credential_spec"):
+    for key in ("secrets", "develop", "credential_spec"):
         if spec.get(key):
             drift.append(f"{key} requires separate review")
+    if spec.get("configs"):
+        if compose_tree is None:
+            drift.append("config source tree unavailable")
+        else:
+            drift.extend(verify_compose_configs(container, spec, compose_tree))
     if name in KNOWN_IMAGE_DRIFT:
         # A separate image override restores the old running image reference.
         need(spec.get("image") != config.get("Image"),
@@ -225,7 +288,7 @@ def plan():
             else:
                 if not recorded_hash or recorded_hash != calculated_hash:
                     problems.append(f"{name}: unexpected Compose hash drift")
-            unexpected = validate_runtime(c, spec, allc, project)
+            unexpected = validate_runtime(c, spec, allc, project, source)
             if unexpected:
                 problems.append(f"{name}: " + ", ".join(unexpected))
             image = docker("image", "inspect", c["Config"]["Image"],

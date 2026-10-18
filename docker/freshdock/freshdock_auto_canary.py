@@ -18,7 +18,7 @@ import sys
 import tempfile
 import time
 
-FRESHDOCk_IMAGE = "ghcr.io/turbootzz/freshdock:1.7.1"
+FRESHDOCK_IMAGE = "ghcr.io/turbootzz/freshdock:1.7.1"
 OLD_IMAGE = "alpine:3.20.0"
 MOVING_TAG = "alpine:3.20"
 LIMIT = 220
@@ -221,7 +221,7 @@ def run_stage(rollback):
                           "-e", "FRESHDOCK_CLEANUP=false",
                           "-e", "FRESHDOCK_PRUNE_DANGLING=false",
                           "-v", "/var/run/docker.sock:/var/run/docker.sock",
-                          FRESHDOCk_IMAGE, "run", "--interval", "5",
+                          FRESHDOCK_IMAGE, "run", "--interval", "5",
                           "--tick", "2"], timeout=240, check=False)
             require(run.returncode == 0,
                     f"Temporary scheduler startup failed: {run.stderr[-400:]}")
@@ -273,28 +273,50 @@ def run_stage(rollback):
         finally:
             print("===== Cleanup of disposable test only =====", flush=True)
             if may_have_created_runner:
-                stopped = docker(["stop", "--time", "20", runner], timeout=45, check=False)
-                # --rm means exited scheduler is already removed; an absent
-                # name is harmless. Check for a genuine leftover below.
-                check = docker(["inspect", "--type", "container", runner], check=False)
-                if check.returncode == 0:
-                    print("WARNING: Temporary Freshdock runner remains:", runner,
+                try:
+                    docker(["stop", "--time", "20", runner], timeout=45, check=False)
+                    # --rm removes the runner when it exits.
+                    check = docker(["inspect", "--type", "container", runner],
+                                   check=False)
+                    if check.returncode == 0:
+                        print("WARNING: Temporary runner still exists:", runner,
+                              flush=True)
+                        clean = False
+                except (OSError, subprocess.TimeoutExpired) as e:
+                    print("WARNING: Runner cleanup error:", type(e).__name__,
                           flush=True)
                     clean = False
             if may_have_created_stack:
-                down = docker(compose + ["down", "--remove-orphans", "--timeout", "10"],
-                              timeout=100, check=False)
-                if down.returncode:
-                    print("WARNING: Test Compose cleanup failed:", project,
-                          down.stderr[-400:], flush=True)
+                try:
+                    down = docker(compose + ["down", "--remove-orphans",
+                                           "--timeout", "10"],
+                                  timeout=100, check=False)
+                    if down.returncode:
+                        print("WARNING: Test stack cleanup failed:", project,
+                              down.stderr[-400:], flush=True)
+                        clean = False
+                except (OSError, subprocess.TimeoutExpired) as e:
+                    print("WARNING: Stack cleanup error:", type(e).__name__,
+                          flush=True)
                     clean = False
             if created_tag:
-                removed = docker(["image", "rm", MOVING_TAG], timeout=50, check=False)
-                if removed.returncode:
-                    print("WARNING: Test-only image tag cleanup failed:", MOVING_TAG,
-                          removed.stderr[-300:], flush=True)
+                try:
+                    removed = docker(["image", "rm", MOVING_TAG], timeout=50,
+                                     check=False)
+                    if removed.returncode:
+                        print("WARNING: Test tag cleanup failed:", MOVING_TAG,
+                              removed.stderr[-300:], flush=True)
+                        clean = False
+                except (OSError, subprocess.TimeoutExpired) as e:
+                    print("WARNING: Image tag cleanup error:", type(e).__name__,
+                          flush=True)
                     clean = False
-            if not verify_existing(before):
+            try:
+                if not verify_existing(before):
+                    clean = False
+            except (OSError, subprocess.TimeoutExpired) as e:
+                print("WARNING: Could not audit existing containers:",
+                      type(e).__name__, flush=True)
                 clean = False
         require(clean, "Disposable cleanup or production identity audit failed")
         require(passed, "Freshdock automatic test did not meet success criteria")

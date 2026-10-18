@@ -99,7 +99,7 @@ def network_mode_parent(c):
     mode = c.get("HostConfig", {}).get("NetworkMode") or ""
     return mode.removeprefix("container:") if mode.startswith("container:") else None
 
-def plan():
+def plan(precutover=False):
     require(os.geteuid() == 0, "Root required")
     require(socket.gethostname() == "openmediavault", "Not the confirmed OMV host")
     now = datetime.now().strftime("%H%M")
@@ -107,19 +107,40 @@ def plan():
     require(docker("compose", "version", check=False).returncode == 0, "Docker Compose unavailable")
     current = all_containers()
     by_name = {c["Name"].lstrip("/"): c for c in current}
-    require("wud" not in by_name, "WUD still present. Run safe daemon switch first")
-    fresh = by_name.get("freshdock")
-    require(fresh is not None and fresh["State"]["Status"] == "running" and
-            fresh["Config"]["Image"] == "ghcr.io/turbootzz/freshdock:1.7.1",
-            "Expected Freshdock v1.7.1 missing")
-    meta = ROOT / "selected.json"
-    require(meta.is_file() and not meta.is_symlink() and
-            meta.stat().st_uid == 0 and (meta.stat().st_mode & 0o777) == 0o600,
-            "Verified private selected.json missing or unsafe")
-    selection = json.loads(meta.read_text())
-    require(selection.get("source") == "live-wud-9.4.1" and
-            selection.get("cron") == CRON, "Unknown selection provenance")
-    chosen = selection.get("container_names")
+    if precutover:
+        require("freshdock" not in by_name and "wud" in by_name,
+                "Precutover review requires WUD only")
+        w = by_name["wud"]
+        wl = labels(w)
+        require(wl.get("com.docker.compose.project") == "wud" and
+                wl.get("com.docker.compose.service") == "wud" and
+                w["State"]["Status"] == "running",
+                "WUD identity/state changed")
+        env = dict(x.split("=", 1) for x in w["Config"]["Env"] if "=" in x)
+        include = env.get("WUD_WATCHER_LOCAL_INCLUDE", "")
+        require(include.startswith("^(?:") and include.endswith(")$") and
+                env.get("WUD_WATCHER_LOCAL_WATCHBYDEFAULT") == "false",
+                "WUD policy changed")
+        try:
+            reg = re.compile(include)
+        except re.error:
+            raise Stop("Malformed WUD include regex") from None
+        chosen = sorted(n for n in by_name if reg.fullmatch(n) and
+                        str(labels(by_name[n]).get("wud.watch", "")).lower() != "false")
+    else:
+        require("wud" not in by_name, "WUD still present. Run safe daemon switch first")
+        fresh = by_name.get("freshdock")
+        require(fresh is not None and fresh["State"]["Status"] == "running" and
+                fresh["Config"]["Image"] == "ghcr.io/turbootzz/freshdock:1.7.1",
+                "Expected Freshdock v1.7.1 missing")
+        meta = ROOT / "selected.json"
+        require(meta.is_file() and not meta.is_symlink() and
+                meta.stat().st_uid == 0 and (meta.stat().st_mode & 0o777) == 0o600,
+                "Verified private selected.json missing or unsafe")
+        selection = json.loads(meta.read_text())
+        require(selection.get("source") == "live-wud-9.4.1" and
+                selection.get("cron") == CRON, "Unknown selection provenance")
+        chosen = selection.get("container_names")
     require(isinstance(chosen, list) and len(chosen) == 26 and
             len(set(chosen)) == len(chosen), "WUD selection no longer matches expected count")
     require(set(chosen) <= set(by_name), "Some selected containers are now missing")
@@ -284,10 +305,14 @@ def apply(prepared, allowed, initial):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--apply", action="store_true", help="recreate vetted apps with Freshdock labels")
+    group = p.add_mutually_exclusive_group()
+    group.add_argument("--apply", action="store_true",
+                       help="recreate vetted apps with Freshdock labels")
+    group.add_argument("--precutover", action="store_true",
+                       help="verify Compose hashes while WUD is still running")
     args = p.parse_args()
     try:
-        prepared, selected, initial = plan()
+        prepared, selected, initial = plan(precutover=args.precutover)
         print("PASS: Read-only preflight", len(selected), "eligible services in",
               len(prepared), "Compose projects.")
         for project, _, _, services, _, _ in prepared:
@@ -296,7 +321,9 @@ def main():
         if args.apply:
             apply(prepared, selected, initial)
         else:
-            print("READ ONLY. --apply performs a scheduled-downtime Compose enrollment.")
+            print("READ ONLY. Precutover checks require no Freshdock installation."
+                  if args.precutover else
+                  "READ ONLY. --apply performs a scheduled-downtime Compose enrollment.")
         return 0
     except (Stop, OSError, KeyError, ValueError) as e:
         print("STOP:", e, file=sys.stderr)

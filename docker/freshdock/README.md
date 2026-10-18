@@ -78,6 +78,51 @@ Investigate the complete inventory, reconcile live configuration for the affecte
 services, and then run the enrollment stage in one reviewed pass. WUD daemon
 replacement and service update enrollment are separate verifiable states.
 
+## Verified full-project enrollment for the 2026-10-18 OMV snapshot
+
+The first live post-WUD audit confirmed **21 candidates**, with nine Compose
+hash matches and 12 previously existing hash mismatches. Ten hash mismatches
+had no differences in the initial runtime comparison. The other two,
+`app-ntfy` and `mariadb_jellyseerr`, had image-reference drift, but their
+locally tagged image IDs matched the running images.
+
+To avoid declaring the old hashes an automatic failure, the newer
+`enroll_services_verified.py` has a **read-only default**:
+
+```bash
+python3 docker/freshdock/enroll_services_verified.py
+```
+
+It recognizes **only the exact 12 recorded hash mismatches**, checks all
+candidate image IDs, selected network-parent dependencies, and safety-sensitive
+runtime settings, and requires entire live Compose projects to be in scope.
+The two image-reference exceptions are overridden in the generated overlay
+with their **currently running image references**, preventing an incidental
+image change during label enrollment.
+
+After the plan passes, `--apply` stages overlays, compares effective Compose
+configuration to the originals with only those verified changes permitted,
+stores a **private 0600 Docker inspect backup** under
+`/docker/freshdock/snapshots/`, and recreates each selected project as a
+unit using Compose dependency ordering. It verifies image IDs remain unchanged,
+all 21 services receive the 02:45 Freshdock labels, and all unselected
+containers stay untouched. On partial failure, Freshdock is stopped to prevent
+unattended updates of an incomplete fleet.
+
+This is a scoped transition based on one known host snapshot, not a general
+purpose authorization to ignore Compose hashes. **A failed read-only check
+must not be bypassed.**
+
+A private SMTP send test is available after installation:
+
+```bash
+python3 docker/freshdock/smtp_smoke_test.py --send
+```
+
+The SMTP test sends one email using the root-only
+`/docker/freshdock/freshdock.toml` and never prints authentication details.
+Delivery still needs confirmation in the destination mailbox.
+
 ## Five intentionally excluded containers
 
 | Container | Why not automatically enrolled yet |

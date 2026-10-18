@@ -71,7 +71,7 @@ class VerifiedEnrollmentTests(unittest.TestCase):
         tree = {"configs": {"ts-serve": {"content": original.decode()}}}
         with patch.object(verified.subprocess, "run", return_value=fake) as runner:
             self.assertEqual(verified.validate_runtime(container, spec, {}, "proj", tree), [])
-            tree["configs"]["ts-serve"]["content"] = '{"unexpected":true}\\n'
+            tree["configs"]["ts-serve"]["content"] = '{"unexpected":true}\n'
             self.assertIn("running config JSON top-level keys differ",
                           verified.validate_runtime(container, spec, {}, "proj", tree))
             # Equivalent JSON must not be refused just for whitespace,

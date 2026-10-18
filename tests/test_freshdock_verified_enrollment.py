@@ -1,5 +1,8 @@
 """Offline guards for verified full-project Freshdock enrollment."""
 import copy
+import io
+import tarfile
+from types import SimpleNamespace
 import sys
 import unittest
 from pathlib import Path
@@ -44,6 +47,45 @@ class VerifiedEnrollmentTests(unittest.TestCase):
         self.assertIn('freshdock.mode: "nightly"', output)
         self.assertIn('freshdock.schedule: "45 2 * * *"', output)
         self.assertNotIn("vaultwarden:", output)
+
+
+    def test_capabilities_accept_docker_prefixes_but_not_missing_privileges(self):
+        live, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")
+        spec["cap_add"] = ["NET_ADMIN", "NET_RAW"]
+        live["HostConfig"]["CapAdd"] = ["CAP_NET_RAW", "CAP_NET_ADMIN"]
+        self.assertEqual(verified.validate_runtime(live, spec, {}, "proj"), [])
+        live["HostConfig"]["CapAdd"] = ["CAP_NET_RAW"]
+        self.assertIn("cap_add differs",
+                      verified.validate_runtime(live, spec, {}, "proj"))
+
+    def test_compose_inline_config_matches_exact_existing_file(self):
+        original = b'{"Web":{"domain":"internal.example"}}\\n'
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode="w") as archive:
+            info = tarfile.TarInfo(name="serve.json")
+            info.size = len(original)
+            archive.addfile(info, io.BytesIO(original))
+        fake = SimpleNamespace(returncode=0, stdout=stream.getvalue())
+        container, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")
+        spec["configs"] = [{"source": "ts-serve", "target": "/config/serve.json"}]
+        tree = {"configs": {"ts-serve": {"content": original.decode()}}}
+        with patch.object(verified.subprocess, "run", return_value=fake) as runner:
+            self.assertEqual(verified.validate_runtime(container, spec, {}, "proj", tree), [])
+            tree["configs"]["ts-serve"]["content"] = '{"unexpected":true}\\n'
+            self.assertIn("running config bytes differ from Compose source",
+                          verified.validate_runtime(container, spec, {}, "proj", tree))
+            tree["configs"]["ts-serve"]["content"] = original.decode()
+            args = runner.call_args.args[0]
+            self.assertEqual(args, ["docker", "cp", "tailscale:/config/serve.json", "-"])
+
+    def test_unavailable_config_does_not_silently_pass(self):
+        container, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")
+        spec["configs"] = [{"source": "ts-serve", "target": "/config/serve.json"}]
+        self.assertIn("config source tree unavailable",
+                      verified.validate_runtime(container, spec, {}, "proj"))
+        self.assertIn("config source cannot be verified byte-for-byte",
+                      verified.validate_runtime(container, spec, {}, "proj",
+                                                {"configs": {"ts-serve": {"external": True}}}))
 
     def test_runtime_explicit_values_detected(self):
         c, spec = live_spec()

@@ -79,7 +79,7 @@ def hashes(cmd):
     for line in output.splitlines():
         fields = line.split()
         if len(fields) == 2 and re.fullmatch(r"[a-f0-9]{64}", fields[1]):
-            found[fields[0]] = fields[1]
+            found[fields[0].rstrip(":")] = fields[1]
     return found
 
 def canary_labels(services):

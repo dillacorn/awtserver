@@ -8,6 +8,9 @@ Gluetun/VPN, paused Transmission or legacy Vaultwarden services.
 """
 import argparse
 import copy
+import io
+import subprocess
+import tarfile
 from datetime import datetime
 import json
 import os
@@ -57,7 +60,177 @@ def inspect_policy(c):
     return c.get("Config", {}).get("Labels") or {}
 
 
-def validate_runtime(container, spec, allc, project):
+def normalized_caps(values):
+    # Docker accepts CAP_NET_ADMIN and NET_ADMIN as equivalent capabilities.
+    # Compare canonical names rather than Docker Engine/Compose formatting.
+    return {str(cap).upper().removeprefix("CAP_") for cap in (values or [])}
+
+
+def live_tailscale_cert_domain(container):
+    """Retrieve the owning Tailscale node's certified DNS hostname read-only.
+
+    Never accept an arbitrary runtime Web key as its own verification: the
+    canonical hostname must originate in the running tailscaled identity.
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "exec", container["Name"].removeprefix("/"),
+             "tailscale", "status", "--json"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=25, check=False)
+        if result.returncode != 0 or len(result.stdout) > 4 * 1024 * 1024:
+            return None
+        status = json.loads(result.stdout)
+        fqdn = (status.get("Self") or {}).get("DNSName")
+        if not isinstance(fqdn, str):
+            return None
+        fqdn = fqdn.rstrip(".").lower()
+        # No newline, path, extra port, wildcard, or empty DNS label can be
+        # interpolated into a new service endpoint.
+        if (len(fqdn) > 253 or "." not in fqdn or
+                not re.fullmatch(
+                    r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+                    r"(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+",
+                    fqdn)):
+            return None
+        return fqdn
+    except (OSError, subprocess.TimeoutExpired, ValueError, TypeError):
+        return None
+
+
+def serve_config_with_key(source, from_key, to_key):
+    """Replace *only* a verified Serve hostname key; retain all Serve values.
+
+    Do not rewrite arbitrary strings, proxy targets, TLS policy, or Funnel flags.
+    A malformed or unexpected Web/AllowFunnel mapping is never accepted.
+    """
+    if not isinstance(source, dict):
+        return None
+    result = copy.deepcopy(source)
+    for field in ("Web", "AllowFunnel"):
+        mapping = result.get(field)
+        if not isinstance(mapping, dict) or set(mapping) != {from_key}:
+            return None
+        result[field] = {to_key: mapping[from_key]}
+    return result
+
+
+def verify_compose_configs(container, spec, compose_tree):
+    """Compare three distinct Tailscale representations without leaking values.
+
+    The rendered Compose config can retain the double-escaped placeholder,
+    while a mounted file has a literal single-dollar placeholder and running
+    Tailscale Serve uses the node's actual FQDN. Require exact semantic data
+    at *both* transitions. Other configs require byte or JSON equivalence.
+    """
+    issues = []
+    declared = spec.get("configs") or []
+    catalog = (compose_tree or {}).get("configs") or {}
+    name = container["Name"].removeprefix("/")
+    token = "$" + "{TS_CERT_DOMAIN}"
+    for item in declared:
+        if not isinstance(item, dict) or not item.get("source"):
+            issues.append("config declaration format unverified")
+            continue
+        source_name = item["source"]
+        target = item.get("target") or "/" + source_name
+        definition = catalog.get(source_name)
+        if (not isinstance(definition, dict) or
+                not isinstance(definition.get("content"), str)):
+            issues.append("config source cannot be verified")
+            continue
+        raw_expected = definition["content"].encode("utf-8")
+        if len(raw_expected) > 1024 * 1024 or not str(target).startswith("/"):
+            issues.append("config size/path outside verification scope")
+            continue
+        try:
+            result = subprocess.run(
+                ["docker", "cp", name + ":" + target, "-"],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                timeout=20, check=False)
+            if result.returncode or len(result.stdout) > 2 * 1024 * 1024:
+                issues.append("running config file inaccessible")
+                continue
+            with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:*") as tf:
+                entries = [x for x in tf.getmembers() if x.isfile()]
+                if len(entries) != 1 or entries[0].size > 1024 * 1024:
+                    issues.append("running config is not one small regular file")
+                    continue
+                file_obj = tf.extractfile(entries[0])
+                actual = file_obj.read(1024 * 1024 + 1) if file_obj else b""
+        except (OSError, subprocess.TimeoutExpired, tarfile.TarError, EOFError):
+            issues.append("running config cannot be safely compared")
+            continue
+        if actual == raw_expected:
+            continue
+        try:
+            mounted_json = json.loads(actual)
+            source_json = json.loads(raw_expected)
+        except (UnicodeError, ValueError):
+            issues.append("running config differs; one or both are not JSON")
+            continue
+        if mounted_json == source_json:
+            continue
+
+        # Only the nine already-audited Tailscale Serve sidecars may have the
+        # known exact template lifecycle. The diagnostic confirmed all nine:
+        # Compose '$' + token -> mounted token -> active authenticated FQDN.
+        audited_sidecar = name in {
+            "tailscale-audiobookshelf", "tailscale-brave",
+            "tailscale-dockge", "tailscale-flame", "tailscale-freshrss",
+            "tailscale-jellyfin", "tailscale-jellyseerr",
+            "tailscale-navidrome", "tailscale-ntfy",
+        }
+        compose_double = "$" + token + ":443"
+        mounted_single = token + ":443"
+        if audited_sidecar and source_name == "ts-serve":
+            expected_mounted = serve_config_with_key(
+                source_json, compose_double, mounted_single)
+            if expected_mounted is None or mounted_json != expected_mounted:
+                issues.append("mounted Tailscale config differs from reviewed template")
+                continue
+            domain = live_tailscale_cert_domain(container)
+            if not domain:
+                issues.append("Tailscale DNS identity unavailable")
+                continue
+            expected_active = serve_config_with_key(
+                mounted_json, mounted_single, domain + ":443")
+            if expected_active is None:
+                issues.append("mounted Tailscale config has unexpected host mapping")
+                continue
+            try:
+                status = subprocess.run(
+                    ["docker", "exec", name, "tailscale",
+                     "serve", "status", "--json"],
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    timeout=25, check=False)
+                if status.returncode != 0 or len(status.stdout) > 4 * 1024 * 1024:
+                    issues.append("active Tailscale Serve status unavailable")
+                    continue
+                active_json = json.loads(status.stdout)
+            except (OSError, subprocess.TimeoutExpired, ValueError):
+                issues.append("active Tailscale Serve config unverified")
+                continue
+            if active_json != expected_active:
+                issues.append("active Tailscale Serve differs from mounted template")
+            continue
+
+        if (isinstance(mounted_json, dict) and
+                isinstance(source_json, dict) and
+                set(mounted_json) != set(source_json)):
+            issues.append("running config JSON top-level keys differ")
+        elif (isinstance(mounted_json, dict) and
+              isinstance(source_json, dict) and
+              "Web" in mounted_json and "Web" in source_json and
+              isinstance(mounted_json["Web"], dict) and
+              isinstance(source_json["Web"], dict) and
+              set(mounted_json["Web"]) != set(source_json["Web"])):
+            issues.append("running config JSON Web hostname keys differ")
+        else:
+            issues.append("running config JSON values differ")
+    return issues
+
+def validate_runtime(container, spec, allc, project, compose_tree=None):
     name = container["Name"].removeprefix("/")
     drift = audit.safe_diffs(container, spec, allc, project)
     # The two reviewed source-image differences are restored to their EXACT
@@ -80,11 +253,12 @@ def validate_runtime(container, spec, allc, project):
                           ("init", "Init")):
         if key in spec and bool(spec[key]) != bool(host.get(live_key)):
             drift.append(f"{key} differs")
-    for key, live_key in (("cap_add", "CapAdd"), ("cap_drop", "CapDrop"),
-                          ("security_opt", "SecurityOpt")):
-        if key in spec:
-            if sorted(spec[key] or []) != sorted(host.get(live_key) or []):
-                drift.append(f"{key} differs")
+    for key, live_key in (("cap_add", "CapAdd"), ("cap_drop", "CapDrop")):
+        if key in spec and normalized_caps(spec[key]) != normalized_caps(host.get(live_key)):
+            drift.append(f"{key} differs")
+    if "security_opt" in spec and sorted(spec["security_opt"] or []) != sorted(
+            host.get("SecurityOpt") or []):
+        drift.append("security_opt differs")
     if "command" in spec:
         desired = spec.get("command")
         actual = config.get("Cmd")
@@ -137,9 +311,14 @@ def validate_runtime(container, spec, allc, project):
             break
     # Exposed settings which the audit cannot safely/reliably compare are
     # blocked rather than considered equivalent.
-    for key in ("secrets", "configs", "develop", "credential_spec"):
+    for key in ("secrets", "develop", "credential_spec"):
         if spec.get(key):
             drift.append(f"{key} requires separate review")
+    if spec.get("configs"):
+        if compose_tree is None:
+            drift.append("config source tree unavailable")
+        else:
+            drift.extend(verify_compose_configs(container, spec, compose_tree))
     if name in KNOWN_IMAGE_DRIFT:
         # A separate image override restores the old running image reference.
         need(spec.get("image") != config.get("Image"),
@@ -225,7 +404,7 @@ def plan():
             else:
                 if not recorded_hash or recorded_hash != calculated_hash:
                     problems.append(f"{name}: unexpected Compose hash drift")
-            unexpected = validate_runtime(c, spec, allc, project)
+            unexpected = validate_runtime(c, spec, allc, project, source)
             if unexpected:
                 problems.append(f"{name}: " + ", ".join(unexpected))
             image = docker("image", "inspect", c["Config"]["Image"],

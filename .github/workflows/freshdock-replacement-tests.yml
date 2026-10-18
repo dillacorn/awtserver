@@ -8,6 +8,7 @@ on:
       - 'docker/freshdock/audit_enrollment.py'
       - 'tests/test_freshdock_enrollment_audit.py'
       - 'docker/freshdock/enroll_services_verified.py'
+      - 'docker/freshdock/diagnose_tailscale_serve.py'
       - 'tests/test_freshdock_verified_enrollment.py'
       - 'docker/freshdock/smtp_smoke_test.py'
       - '.github/workflows/freshdock-replacement-tests.yml'
@@ -19,6 +20,7 @@ on:
       - 'docker/freshdock/audit_enrollment.py'
       - 'tests/test_freshdock_enrollment_audit.py'
       - 'docker/freshdock/enroll_services_verified.py'
+      - 'docker/freshdock/diagnose_tailscale_serve.py'
       - 'tests/test_freshdock_verified_enrollment.py'
       - 'docker/freshdock/smtp_smoke_test.py'
       - '.github/workflows/freshdock-replacement-tests.yml'
@@ -29,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Python syntax
-        run: python3 -m py_compile docker/freshdock/replace_wud_daemon.py docker/freshdock/enroll_services.py docker/freshdock/audit_enrollment.py docker/freshdock/enroll_services_verified.py docker/freshdock/smtp_smoke_test.py tests/test_freshdock_verified_enrollment.py tests/test_freshdock_replacement.py tests/test_freshdock_enrollment_audit.py
+        run: python3 -m py_compile docker/freshdock/replace_wud_daemon.py docker/freshdock/enroll_services.py docker/freshdock/audit_enrollment.py docker/freshdock/enroll_services_verified.py docker/freshdock/diagnose_tailscale_serve.py docker/freshdock/smtp_smoke_test.py tests/test_freshdock_verified_enrollment.py tests/test_freshdock_replacement.py tests/test_freshdock_enrollment_audit.py
       - name: Safeguard tests
         run: python3 -m unittest discover -s tests -p 'test_freshdock_replacement.py' -v
       - name: Audit test suite

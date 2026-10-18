@@ -146,3 +146,26 @@ Freshdock's triggers `succeeded,failed` replace WUD's `success,failure,rollback`
 This branch removes the obsolete WUD Compose, installer, and test workflow; updates `restart_defined_compose.sh` to reference Freshdock rather than the old Watchtower path. Historic WUD files remain available in Git history. **Do not merge or treat the source as deployed merely because CI passes.** Confirm production cutover output and excluded-service safety first.
 
 Related: [replacement decision #8](https://github.com/dillacorn/omv-remote-dots/issues/8), [Freshdock canary #10](https://github.com/dillacorn/omv-remote-dots/pull/10), [live migration audit #11](https://github.com/dillacorn/omv-remote-dots/pull/11).
+
+### Tailscale inline config comparisons
+
+The live nine Tailscale sidecars mount Compose inline JSON configs. Their
+content validator reads the file from each running container without printing
+its contents or credentials and compares it against the currently rendered
+Compose `configs.content` value. Capability strings `CAP_NET_ADMIN` and
+`NET_ADMIN` are treated as equivalent (same for `NET_RAW`).
+
+For JSON configs, equivalent parsed JSON data may differ in formatting,
+whitespace or member order. **Tailscale also expands `${TS_CERT_DOMAIN}`**
+to its node's actual FQDN when applying the Serve configuration. When the
+template contains that placeholder, the preflight gets the DNSName from the
+*running sidecar's own* `tailscale status --json`, resolves the placeholder and
+requires the **entire parsed JSON document** to match the live config.
+The live diagnostic confirmed one additional Compose-escaping stage for all nine
+sidecars: the effective Compose config retains the double-escaped
+`${TS_CERT_DOMAIN}`, the mounted file contains `${TS_CERT_DOMAIN}`, and
+active Serve uses the authenticated FQDN. The enrollment preflight validates
+**both transitions** and all remaining JSON fields against live state. A
+different hostname, HTTP proxy, Funnel setting, or JSON value blocks
+enrollment; no service config contents or credentials are printed. No files
+in the running containers are modified by the preflight.

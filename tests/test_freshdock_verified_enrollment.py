@@ -1,5 +1,9 @@
 """Offline guards for verified full-project Freshdock enrollment."""
 import copy
+import io
+import json
+import tarfile
+from types import SimpleNamespace
 import sys
 import unittest
 from pathlib import Path
@@ -44,6 +48,190 @@ class VerifiedEnrollmentTests(unittest.TestCase):
         self.assertIn('freshdock.mode: "nightly"', output)
         self.assertIn('freshdock.schedule: "45 2 * * *"', output)
         self.assertNotIn("vaultwarden:", output)
+
+
+    def test_capabilities_accept_docker_prefixes_but_not_missing_privileges(self):
+        live, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")
+        spec["cap_add"] = ["NET_ADMIN", "NET_RAW"]
+        live["HostConfig"]["CapAdd"] = ["CAP_NET_RAW", "CAP_NET_ADMIN"]
+        self.assertEqual(verified.validate_runtime(live, spec, {}, "proj"), [])
+        live["HostConfig"]["CapAdd"] = ["CAP_NET_RAW"]
+        self.assertIn("cap_add differs",
+                      verified.validate_runtime(live, spec, {}, "proj"))
+
+    def test_compose_inline_config_matches_exact_existing_file(self):
+        original = b'{"Web":{"domain":"internal.example"}}\n'
+        stream = io.BytesIO()
+        with tarfile.open(fileobj=stream, mode="w") as archive:
+            info = tarfile.TarInfo(name="serve.json")
+            info.size = len(original)
+            archive.addfile(info, io.BytesIO(original))
+        fake = SimpleNamespace(returncode=0, stdout=stream.getvalue())
+        container, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")
+        spec["configs"] = [{"source": "ts-serve", "target": "/config/serve.json"}]
+        tree = {"configs": {"ts-serve": {"content": original.decode()}}}
+        with patch.object(verified.subprocess, "run", return_value=fake) as runner:
+            self.assertEqual(verified.validate_runtime(container, spec, {}, "proj", tree), [])
+            tree["configs"]["ts-serve"]["content"] = '{"unexpected":true}\n'
+            self.assertIn("running config JSON top-level keys differ",
+                          verified.validate_runtime(container, spec, {}, "proj", tree))
+            # Equivalent JSON must not be refused just for whitespace,
+            # member order or trailing-newline differences.
+            tree["configs"]["ts-serve"]["content"] = '{"Web": { "domain": "internal.example" }}'
+            self.assertEqual(
+                verified.validate_runtime(container, spec, {}, "proj", tree), [])
+            tree["configs"]["ts-serve"]["content"] = original.decode()
+            args = runner.call_args.args[0]
+            self.assertEqual(args, ["docker", "cp", "tailscale:/config/serve.json", "-"])
+
+    def test_tailscale_serves_runtime_hostname_from_its_identity(self):
+        token = "$" + "{TS_CERT_DOMAIN}"
+        source_key = "$" + token + ":443"
+        mounted_key = token + ":443"
+        domain = "demo.tailnet.ts.net"
+        active_key = domain + ":443"
+        template = {
+            "TCP": {"443": {"HTTPS": True}},
+            "Web": {source_key: {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8090"}}}},
+            "AllowFunnel": {source_key: False},
+        }
+        mounted = verified.serve_config_with_key(
+            template, source_key, mounted_key)
+        active = verified.serve_config_with_key(
+            mounted, mounted_key, active_key)
+        self.assertIsNotNone(mounted)
+        self.assertIsNotNone(active)
+
+        stream = io.BytesIO()
+        raw = json.dumps(mounted).encode("utf-8")
+        with tarfile.open(fileobj=stream, mode="w") as archive:
+            entry = tarfile.TarInfo(name="serve.json")
+            entry.size = len(raw)
+            archive.addfile(entry, io.BytesIO(raw))
+        runtime_file = SimpleNamespace(returncode=0, stdout=stream.getvalue())
+        identity = SimpleNamespace(returncode=0, stdout=json.dumps(
+            {"Self": {"DNSName": domain + "."}}).encode("utf-8"))
+        serve = SimpleNamespace(returncode=0, stdout=json.dumps(active).encode("utf-8"))
+
+        def fake_run(argv, **kwargs):
+            if argv[:3] == ["docker", "exec", "tailscale-freshrss"]:
+                if argv[3:] == ["tailscale", "status", "--json"]:
+                    return identity
+                if argv[3:] == ["tailscale", "serve", "status", "--json"]:
+                    return serve
+            if argv[:3] == ["docker", "cp", "tailscale-freshrss:/config/serve.json"]:
+                return runtime_file
+            raise AssertionError("Unexpected command")
+
+        container, spec = live_spec(
+            image="tailscale/tailscale:latest", service="tailscale-freshrss")
+        spec["configs"] = [{"source": "ts-serve", "target": "/config/serve.json"}]
+        tree = {"configs": {"ts-serve": {"content": json.dumps(template)}}}
+        with patch.object(verified.subprocess, "run", side_effect=fake_run):
+            self.assertEqual(
+                verified.validate_runtime(container, spec, {}, "proj", tree), [])
+            # Never accept a DNS identity that does not actually match Serve.
+            identity.stdout = json.dumps(
+                {"Self": {"DNSName": "other.tailnet.ts.net."}}).encode()
+            self.assertIn("active Tailscale Serve differs from mounted template",
+                          verified.validate_runtime(container, spec, {}, "proj", tree))
+            identity.stdout = json.dumps({"Self": {"DNSName": domain + "."}}).encode()
+            # Do not allow a missing/broken Serve status to bypass verification.
+            serve.returncode = 1
+            self.assertIn("active Tailscale Serve status unavailable",
+                          verified.validate_runtime(container, spec, {}, "proj", tree))
+            serve.returncode = 0
+            # Do not allow changed proxy or Serve settings.
+            serve.stdout = json.dumps({
+                **active, "TCP": {"443": {"HTTPS": False}}}).encode()
+            self.assertIn("active Tailscale Serve differs from mounted template",
+                          verified.validate_runtime(container, spec, {}, "proj", tree))
+            serve.stdout = json.dumps(active).encode()
+            # Mounted proxy drift must not be accepted either.
+            mounted_bad = copy.deepcopy(mounted)
+            mounted_bad["Web"][mounted_key]["Handlers"]["/"]["Proxy"] = "http://127.0.0.1:9999"
+            stream_bad = io.BytesIO()
+            bad_raw = json.dumps(mounted_bad).encode()
+            with tarfile.open(fileobj=stream_bad, mode="w") as archive:
+                entry = tarfile.TarInfo(name="serve.json")
+                entry.size = len(bad_raw)
+                archive.addfile(entry, io.BytesIO(bad_raw))
+            runtime_file.stdout = stream_bad.getvalue()
+            self.assertIn("mounted Tailscale config differs from reviewed template",
+                          verified.validate_runtime(container, spec, {}, "proj", tree))
+
+    def test_tailscale_only_rewrites_approved_hostname_keys(self):
+        token = "$" + "{TS_CERT_DOMAIN}"
+        key = "$" + token + ":443"
+        template = {
+            "Web": {key: {"Handlers": {"/": {"Proxy": "http://127.0.0.1:8090"}}}},
+            "AllowFunnel": {key: False},
+            "TCP": {"443": {"HTTPS": True}},
+        }
+        expected = verified.serve_config_with_key(
+            template, key, "example.tailnet.ts.net:443")
+        self.assertEqual(list(expected["Web"]), ["example.tailnet.ts.net:443"])
+        self.assertEqual(expected["TCP"], template["TCP"])
+        self.assertIsNone(verified.serve_config_with_key(
+            {**template, "AllowFunnel": {"other.tailnet.ts.net:443": False}},
+            key, "example.tailnet.ts.net:443"))
+
+    def test_tailscale_invalid_identity_is_not_accepted(self):
+        container, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")
+        with patch.object(verified.subprocess, "run",
+                          return_value=SimpleNamespace(
+                              returncode=0,
+                              stdout=b'{"Self":{"DNSName":"not/a/domain"}}')):
+            self.assertIsNone(verified.live_tailscale_cert_domain(container))
+
+
+    def test_masked_diagnostic_does_not_reveal_web_hostname(self):
+        import diagnose_tailscale_serve as diag
+        source = {
+            "TCP": {"443": {"HTTPS": True}},
+            "Web": {"__TOKEN__:443": {"Handlers": {"/": {
+                "Proxy": "http://127.0.0.1:8080"}}}},
+            "AllowFunnel": {"__TOKEN__:443": False},
+        }
+        import json as _json
+        active = _json.loads(_json.dumps(source).replace(
+            "__TOKEN__", "test.secret-tailnet.ts.net"))
+        template = _json.loads(_json.dumps(source).replace(
+            "__TOKEN__", diag.TOKEN))
+        self.assertEqual(diag.web_key_kind(template, "test.secret-tailnet.ts.net"),
+                         "TEMPLATE")
+        double_escaped = {"Web": {"$" + diag.TOKEN + ":443": {}}}
+        self.assertEqual(diag.web_key_kind(double_escaped, "test.secret-tailnet.ts.net"),
+                         "DOUBLE_ESCAPED_TEMPLATE")
+        self.assertEqual(diag.web_key_kind(active, "test.secret-tailnet.ts.net"),
+                         "IDENTITY")
+        self.assertEqual(diag.compare_fields(template, active,
+                                              "test.secret-tailnet.ts.net"), "MATCH")
+        active["Web"]["test.secret-tailnet.ts.net:443"]["Handlers"]["/"]["Proxy"] = "http://127.0.0.1:8081"
+        result = diag.compare_fields(template, active,
+                                     "test.secret-tailnet.ts.net")
+        self.assertEqual(result, "Web")
+        self.assertNotIn("secret-tailnet", result)
+        self.assertNotIn("8081", result)
+
+    def test_diagnostic_does_not_normalize_unverified_web_hostname(self):
+        import diagnose_tailscale_serve as diag
+        template = {"Web": {diag.TOKEN + ":443": {"Handlers": {}}},
+                    "AllowFunnel": {diag.TOKEN + ":443": False}, "TCP": {}}
+        unrelated = {"Web": {"other.tailnet.ts.net:443": {"Handlers": {}}},
+                     "AllowFunnel": {"other.tailnet.ts.net:443": False}, "TCP": {}}
+        self.assertEqual(diag.compare_fields(template, unrelated,
+                                             "real.tailnet.ts.net"),
+                         "Web,AllowFunnel")
+
+    def test_unavailable_config_does_not_silently_pass(self):
+        container, spec = live_spec(image="tailscale/tailscale:latest", service="tailscale")
+        spec["configs"] = [{"source": "ts-serve", "target": "/config/serve.json"}]
+        self.assertIn("config source tree unavailable",
+                      verified.validate_runtime(container, spec, {}, "proj"))
+        self.assertIn("config source cannot be verified",
+                      verified.validate_runtime(container, spec, {}, "proj",
+                                                {"configs": {"ts-serve": {"external": True}}}))
 
     def test_runtime_explicit_values_detected(self):
         c, spec = live_spec()

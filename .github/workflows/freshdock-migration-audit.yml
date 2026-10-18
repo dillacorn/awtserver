@@ -5,12 +5,16 @@ on:
     paths:
       - 'docker/freshdock/audit_migration.py'
       - 'tests/test_freshdock_migration_audit.py'
+      - 'docker/freshdock/resolve_missing_compose.py'
+      - 'tests/test_freshdock_compose_discovery.py'
       - '.github/workflows/freshdock-migration-audit.yml'
   push:
     branches: [main]
     paths:
       - 'docker/freshdock/audit_migration.py'
       - 'tests/test_freshdock_migration_audit.py'
+      - 'docker/freshdock/resolve_missing_compose.py'
+      - 'tests/test_freshdock_compose_discovery.py'
       - '.github/workflows/freshdock-migration-audit.yml'
 
 jobs:
@@ -19,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate Python syntax
-        run: python3 -m py_compile docker/freshdock/audit_migration.py tests/test_freshdock_migration_audit.py
+        run: python3 -m py_compile docker/freshdock/audit_migration.py docker/freshdock/resolve_missing_compose.py tests/test_freshdock_migration_audit.py tests/test_freshdock_compose_discovery.py
       - name: Run non-destructive audit tests
         run: python3 -m unittest discover -s tests -p 'test_freshdock_migration_audit.py' -v
+      - name: Validate read-only Compose discovery
+        run: python3 -m unittest discover -s tests -p 'test_freshdock_compose_discovery.py' -v

@@ -72,8 +72,13 @@ class VerifiedEnrollmentTests(unittest.TestCase):
         with patch.object(verified.subprocess, "run", return_value=fake) as runner:
             self.assertEqual(verified.validate_runtime(container, spec, {}, "proj", tree), [])
             tree["configs"]["ts-serve"]["content"] = '{"unexpected":true}\\n'
-            self.assertIn("running config bytes differ from Compose source",
+            self.assertIn("running config JSON top-level keys differ",
                           verified.validate_runtime(container, spec, {}, "proj", tree))
+            # Equivalent JSON must not be refused just for whitespace,
+            # member order or trailing-newline differences.
+            tree["configs"]["ts-serve"]["content"] = '{"Web": { "domain": "internal.example" }}'
+            self.assertEqual(
+                verified.validate_runtime(container, spec, {}, "proj", tree), [])
             tree["configs"]["ts-serve"]["content"] = original.decode()
             args = runner.call_args.args[0]
             self.assertEqual(args, ["docker", "cp", "tailscale:/config/serve.json", "-"])

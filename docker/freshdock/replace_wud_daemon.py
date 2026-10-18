@@ -10,6 +10,7 @@ import argparse
 from datetime import datetime
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import socket
@@ -89,6 +90,22 @@ def assert_live_state():
     need(all(env.get(k) for k in REQUIRED.values()), "WUD SMTP incomplete")
     need(env[REQUIRED["port"]] in ("465", "587"),
          "SMTP port requires explicit TLS-mode review")
+    include = env.get("WUD_WATCHER_LOCAL_INCLUDE", "")
+    need(include.startswith("^(?:") and include.endswith(")$"),
+         "WUD name allowlist is not exact/anchored")
+    try:
+        pat = re.compile(include)
+    except re.error:
+        raise Refused("Invalid WUD watcher name allowlist") from None
+    ids = docker("ps", "-aq").stdout.split()
+    allc = json.loads(docker("inspect", *ids).stdout) if ids else []
+    selected = sorted(c["Name"].lstrip("/") for c in allc
+                      if pat.fullmatch(c["Name"].lstrip("/")) and
+                      str((c["Config"].get("Labels") or {}).get("wud.watch", "")).lower() != "false")
+    need(len(selected) == 26, "Selected container count changed; review actual live scope")
+    need(set(("gluetun", "transmission", "mullvad-browser", "vaultwarden",
+              "nginx-vaultwarden")) <= set(selected),
+         "Expected protected containers missing from allowlist")
     need(WUD_DIR.joinpath("compose.yml").is_file(), "WUD Compose source missing")
     need(WUD_DIR.joinpath(".env").is_file(), "WUD private .env missing")
     for name in ("pihole", "dnsproxy-quad9", "nginx-pihole"):
@@ -110,7 +127,7 @@ def assert_live_state():
          "Mullvad Browser not attached to current Gluetun")
     need(not ROOT.exists() or (ROOT.is_dir() and not any(ROOT.iterdir())),
          "Existing Freshdock directory content; refusing overwrite")
-    return env
+    return env, selected
 
 def toml_string(val):
     need("\x00" not in val and "\n" not in val and "\r" not in val,
@@ -138,7 +155,7 @@ def smtp_toml(env):
         "",
     ])
 
-def apply(env, source):
+def apply(env, selected, source):
     staged = False
     wud_stopped = False
     installed = False
@@ -149,6 +166,11 @@ def apply(env, source):
         dst = ROOT / "compose.yml"
         dst.write_bytes(source.read_bytes())
         dst.chmod(0o600)
+        selection = ROOT / "selected.json"
+        selection.write_text(json.dumps({"source": "live-wud-9.4.1",
+                                         "cron": EXPECTED_CRON,
+                                         "container_names": selected}, indent=2) + "\n")
+        selection.chmod(0o600)
         private = ROOT / "freshdock.toml"
         private.write_text(smtp_toml(env))
         private.chmod(0o600)
@@ -191,7 +213,7 @@ def apply(env, source):
         if not wud_stopped:
             # No production change occurred before this stage except image pull.
             if staged:
-                for path in (ROOT / "freshdock.toml", ROOT / "compose.yml"):
+                for path in (ROOT / "freshdock.toml", ROOT / "selected.json", ROOT / "compose.yml"):
                     path.unlink(missing_ok=True)
                 try:
                     ROOT.rmdir()
@@ -211,14 +233,15 @@ def main():
                         help="local trusted Compose source (not downloaded by script)")
     args = parser.parse_args()
     try:
-        env = assert_live_state()
+        env, selected = assert_live_state()
+        print("Existing WUD-selected containers:", len(selected), "(source stored privately on apply)")
         print("PASS: Host, WUD, critical DNS, Gluetun, and private SMTP preflight")
         print("SMTP present; TLS mode:", "STARTTLS" if env[REQUIRED["port"]] == "587"
               else "implicit")
         print("Current 02:45 WUD update schedule noted; Freshdock will not have "
               "any auto-enrolled applications until stage two.")
         if args.apply:
-            apply(env, Path(args.compose))
+            apply(env, selected, Path(args.compose))
         else:
             print("READ ONLY: Add --apply --compose <file> for daemon replacement.")
         return 0

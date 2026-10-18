@@ -81,7 +81,7 @@ def live_tailscale_cert_domain(container):
         if result.returncode != 0 or len(result.stdout) > 4 * 1024 * 1024:
             return None
         status = json.loads(result.stdout)
-        fqdn = status.get("Self", {}).get("DNSName")
+        fqdn = (status.get("Self") or {}).get("DNSName")
         if not isinstance(fqdn, str):
             return None
         fqdn = fqdn.rstrip(".").lower()
@@ -90,7 +90,7 @@ def live_tailscale_cert_domain(container):
         if (len(fqdn) > 253 or "." not in fqdn or
                 not re.fullmatch(
                     r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
-                    r"(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+",
+                    r"(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+",
                     fqdn)):
             return None
         return fqdn

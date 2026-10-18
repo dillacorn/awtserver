@@ -66,6 +66,38 @@ def normalized_caps(values):
     return {str(cap).upper().removeprefix("CAP_") for cap in (values or [])}
 
 
+def live_tailscale_cert_domain(container):
+    """Retrieve the owning Tailscale node's certified DNS hostname read-only.
+
+    Never accept an arbitrary runtime Web key as its own verification: the
+    canonical hostname must originate in the running tailscaled identity.
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "exec", container["Name"].removeprefix("/"),
+             "tailscale", "status", "--json"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=25, check=False)
+        if result.returncode != 0 or len(result.stdout) > 4 * 1024 * 1024:
+            return None
+        status = json.loads(result.stdout)
+        fqdn = status.get("Self", {}).get("DNSName")
+        if not isinstance(fqdn, str):
+            return None
+        fqdn = fqdn.rstrip(".").lower()
+        # No newline, path, extra port, wildcard, or empty DNS label can be
+        # interpolated into a new service endpoint.
+        if (len(fqdn) > 253 or "." not in fqdn or
+                not re.fullmatch(
+                    r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+                    r"(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+",
+                    fqdn)):
+            return None
+        return fqdn
+    except (OSError, subprocess.TimeoutExpired, ValueError, TypeError):
+        return None
+
+
 def verify_compose_configs(container, spec, compose_tree):
     """Confirm actual mounted config content matches the resolved Compose source.
 
@@ -117,6 +149,25 @@ def verify_compose_configs(container, spec, compose_tree):
                     if live_json == source_json:
                         # JSON indentation, member order and trailing whitespace
                         # have no semantic effect. Never ignore altered values.
+                        continue
+                    # Tailscale containerboot substitutes ${TS_CERT_DOMAIN}
+                    # from its OWN authenticated node identity when applying
+                    # TS_SERVE_CONFIG; current Compose may still hold a template.
+                    # Require whole-object equivalence after substitution.
+                    if "${TS_CERT_DOMAIN}" in definition["content"]:
+                        domain = live_tailscale_cert_domain(container)
+                        if domain is None:
+                            issues.append("Tailscale DNS identity unavailable")
+                            continue
+                        rendered = definition["content"].replace(
+                            "${TS_CERT_DOMAIN}", domain)
+                        try:
+                            if json.loads(rendered) == live_json:
+                                continue
+                        except (UnicodeError, ValueError):
+                            issues.append("rendered Tailscale config is not valid JSON")
+                            continue
+                        issues.append("Tailscale config differs after verified hostname substitution")
                         continue
                     if (isinstance(live_json, dict) and
                             isinstance(source_json, dict) and

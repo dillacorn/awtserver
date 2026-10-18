@@ -59,7 +59,7 @@ class VerifiedEnrollmentTests(unittest.TestCase):
                       verified.validate_runtime(live, spec, {}, "proj"))
 
     def test_compose_inline_config_matches_exact_existing_file(self):
-        original = b'{"Web":{"domain":"internal.example"}}\\n'
+        original = b'{"Web":{"domain":"internal.example"}}\n'
         stream = io.BytesIO()
         with tarfile.open(fileobj=stream, mode="w") as archive:
             info = tarfile.TarInfo(name="serve.json")

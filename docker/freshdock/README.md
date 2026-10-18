@@ -146,3 +146,17 @@ Freshdock's triggers `succeeded,failed` replace WUD's `success,failure,rollback`
 This branch removes the obsolete WUD Compose, installer, and test workflow; updates `restart_defined_compose.sh` to reference Freshdock rather than the old Watchtower path. Historic WUD files remain available in Git history. **Do not merge or treat the source as deployed merely because CI passes.** Confirm production cutover output and excluded-service safety first.
 
 Related: [replacement decision #8](https://github.com/dillacorn/omv-remote-dots/issues/8), [Freshdock canary #10](https://github.com/dillacorn/omv-remote-dots/pull/10), [live migration audit #11](https://github.com/dillacorn/omv-remote-dots/pull/11).
+
+### Tailscale inline config comparisons
+
+The live nine Tailscale sidecars mount Compose inline JSON configs. Their
+content validator reads the file from each running container without printing
+its contents or credentials and compares it against the currently rendered
+Compose `configs.content` value. Capability strings `CAP_NET_ADMIN` and
+`NET_ADMIN` are treated as equivalent (same for `NET_RAW`).
+
+For JSON configs, **only equivalent parsed JSON data** may differ in formatting,
+whitespace, or member order. Changed hostname keys, source values, or invalid
+JSON still block enrollment and are reported by category without disclosing
+sensitive values. No files in the running containers are modified by the
+preflight. This does not skip checks for non-JSON configs.

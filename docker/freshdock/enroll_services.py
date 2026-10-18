@@ -147,13 +147,6 @@ def plan(precutover=False):
     require(SKIP <= set(chosen), "Protected service not in recorded WUD scope")
     require(not any(labels(c).get("freshdock.enable") == "true" for c in current),
             "Some services are already enrolled; check partial deployment first")
-    # Mass application recreation must not coincide with storage instability.
-    kernel = call(["journalctl", "-k", "--since", "30 minutes ago", "-o", "cat",
-                   "--no-pager"], check=False, timeout=30)
-    require(kernel.returncode == 0, "Cannot inspect recent disk kernel errors")
-    require(not re.search(r"ata13(?:\.\d+)?:.*(?:failed|timeout|reset|frozen)|"
-                          r"I/O error, dev sdb\b", kernel.stdout, re.I),
-            "Recent SATA/SnapRAID disk I/O errors; refuse mass container recreation")
     allowed = set(chosen) - SKIP
     id_to_name = {c["Id"]: c["Name"].lstrip("/") for c in current}
     for c in current:

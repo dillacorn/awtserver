@@ -183,6 +183,13 @@ def plan(precutover=False):
                     for x in files), f"{name}: invalid Compose file location")
         groups[(proj, directory, files)][svc] = name
         require(c["State"]["Status"] == "running", f"{name}: not running; do not recreate")
+        # A label-only enrollment must never implicitly advance an application
+        # to a different locally cached image. Let Freshdock do that later.
+        local_image = docker("image", "inspect", c["Config"]["Image"],
+                             "--format", "{{.Id}}", check=False)
+        require(local_image.returncode == 0 and
+                local_image.stdout.strip() == c["Image"],
+                f"{name}: local image tag moved or missing; would change image during enrollment")
     prepared = []
     for (project, directory, files), services in sorted(groups.items()):
         base = compose_cmd(project, directory, files)

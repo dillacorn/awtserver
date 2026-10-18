@@ -131,17 +131,24 @@ def safe_diffs(container, spec, fullc, project):
             problems.append("shared-network parent ID differs")
     elif mode in ("host", "none", "bridge") and mode != actual_mode:
         problems.append("network mode differs")
-    expected_mounts = set()
-    for m in spec.get("volumes", []):
-        if not isinstance(m, dict):
-            continue
-        expected_mounts.add((m.get("type"),str(m.get("source")),m.get("target")))
-    current_mounts = {(m.get("Type"),str(m.get("Source")),m.get("Destination"))
-                      for m in container.get("Mounts", [])}
-    if expected_mounts - current_mounts:
-        problems.append("expected mounts differ/missing")
-    if current_mounts - expected_mounts:
-        problems.append("extra live mounts not in Compose source")
+    # Bind mount sources must match. Named Docker volumes have engine-generated
+    # host paths that differ from Compose's source aliases; compare type/target
+    # and report named-source checks as an additional live verification gate.
+    expected_mounts = {
+        m.get("target"): (m.get("type"), str(m.get("source")))
+        for m in spec.get("volumes", []) if isinstance(m, dict)
+    }
+    current_mounts = {
+        m.get("Destination"): m for m in container.get("Mounts", [])
+    }
+    for target, (mount_type, source) in expected_mounts.items():
+        actual = current_mounts.get(target)
+        if not actual or actual.get("Type") != mount_type:
+            problems.append("expected mount target/type differs")
+        elif mount_type == "bind" and actual.get("Source") != source:
+            problems.append("bind mount source differs")
+    if set(current_mounts) - set(expected_mounts):
+        problems.append("extra live mount targets not in Compose source")
     return problems
 
 def main():

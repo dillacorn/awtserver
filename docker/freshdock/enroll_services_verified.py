@@ -4,7 +4,7 @@
 Default: plan only. --apply recreates each *complete*, reviewed Compose project
 with label-only overlays and source-image pinning for two known drift cases.
 Stop on unknown changes and preserve private rollback evidence. Never touch
-Gl uetun/VPN, paused Transmission or legacy Vaultwarden services.
+Gluetun/VPN, paused Transmission or legacy Vaultwarden services.
 """
 import argparse
 import copy
@@ -60,6 +60,11 @@ def inspect_policy(c):
 def validate_runtime(container, spec, allc, project):
     name = container["Name"].removeprefix("/")
     drift = audit.safe_diffs(container, spec, allc, project)
+    # The two reviewed source-image differences are restored to their EXACT
+    # running references by our overlay before Compose touches anything.
+    if name in KNOWN_IMAGE_DRIFT:
+        drift = [item for item in drift
+                 if item != "source image reference differs from live"]
     # Verify explicit security-sensitive fields; don't print values.
     config = container["Config"]
     host = container["HostConfig"]
@@ -344,7 +349,7 @@ def main():
     args = parser.parse_args()
     try:
         allc, projects, snapshots, problems = plan()
-        print("===== FRESHD OCK ENROLLMENT CHECK =====")
+        print("===== FRESHDOCK ENROLLMENT CHECK =====")
         print("Projects:", len(projects), "services:", sum(map(len, projects.values())))
         for key, services in sorted(projects.items()):
             print(key[0] + ":", ", ".join(sorted(services.values())))

@@ -64,3 +64,28 @@ Prepare a **separate guarded cutover** that:
 **No merge, release or production migration is authorized merely by the audit.** Related: #8, #9, #10.
 
 Freshdock documentation: https://github.com/Turbootzz/freshdock/blob/main/docs/configuration.md and https://github.com/Turbootzz/freshdock/blob/main/docs/notifications.md.
+
+## Follow-up live audit findings (2026-10-18)
+
+The user ran the read-only audit on OMV successfully:
+
+- **26** of the 28 exact WUD allowlist names currently exist. There were **no** unexpected `wud.watch=true` overrides, WUD exemptions, or existing Freshdock/Watchtower policy labels.
+- WUD's **six of six SMTP fields are present** in the actual running container. Its actual TLS mode still requires a private configuration review; never disclose SMTP addresses or credentials.
+- Docker Compose labels resolve selected containers to **12** projects, many using separate `compose.yml` and `compose.override.yml` files. Apply both original paths in order when validating or migrating.
+- **Two recorded Compose paths are missing**: `/docker/rustdesk/docker-compose.yml` for `hbbs` and `hbbr`, and `/docker/vaultwarden/docker-compose.yml` for `nginx-vaultwarden` and `vaultwarden`. Do not blindly recreate these four containers; first identify their actual live Compose source and confirm its service names.
+- Transmission remains **paused with a stale Gluetun namespace**. Mullvad Browser is correctly attached to Gluetun.
+
+Use the additional **read-only targeted discovery**:
+
+```bash
+python3 docker/freshdock/resolve_missing_compose.py
+```
+
+It searches only the relevant two project directories (bounded depth), checks
+recorded Docker Compose source paths, and safely asks `docker compose config
+--services` for candidate file service names. It does not print config contents,
+interpolation error messages, environment values, volumes or secrets. Failed
+validation is reported as unverified, not interpreted as absence of a service.
+If the missing files cannot be found or parsed, preserve these four services in
+place during any initial migration rather than reconstructing their configuration
+from container inspect alone.

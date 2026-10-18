@@ -74,7 +74,7 @@ def without_freshdock(tree, selected):
     return tree
 
 def hashes(cmd):
-    output = call(cmd + ["config", "--hash"], timeout=45).stdout
+    output = call(cmd + ["config", "--hash=*"], timeout=45).stdout
     found = {}
     for line in output.splitlines():
         fields = line.split()

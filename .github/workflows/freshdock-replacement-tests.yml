@@ -1,0 +1,26 @@
+name: Freshdock replacement safety
+
+on:
+  pull_request:
+    paths:
+      - 'docker/freshdock/**'
+      - 'tests/test_freshdock_replacement.py'
+      - '.github/workflows/freshdock-replacement-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/freshdock/**'
+      - 'tests/test_freshdock_replacement.py'
+      - '.github/workflows/freshdock-replacement-tests.yml'
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax
+        run: python3 -m py_compile docker/freshdock/replace_wud_daemon.py docker/freshdock/enroll_services.py tests/test_freshdock_replacement.py
+      - name: Safeguard tests
+        run: python3 -m unittest discover -s tests -p 'test_freshdock_replacement.py' -v
+      - name: Validate Freshdock Compose syntax
+        run: docker compose -f docker/freshdock/compose.yml config --quiet

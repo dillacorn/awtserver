@@ -147,6 +147,9 @@ class VerifiedEnrollmentTests(unittest.TestCase):
             "__TOKEN__", diag.TOKEN))
         self.assertEqual(diag.web_key_kind(template, "test.secret-tailnet.ts.net"),
                          "TEMPLATE")
+        double_escaped = {"Web": {"$" + diag.TOKEN + ":443": {}}}
+        self.assertEqual(diag.web_key_kind(double_escaped, "test.secret-tailnet.ts.net"),
+                         "DOUBLE_ESCAPED_TEMPLATE")
         self.assertEqual(diag.web_key_kind(active, "test.secret-tailnet.ts.net"),
                          "IDENTITY")
         self.assertEqual(diag.compare_fields(template, active,

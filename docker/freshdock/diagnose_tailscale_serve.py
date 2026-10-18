@@ -67,6 +67,8 @@ def web_key_kind(tree, domain):
     key = keys[0]
     if key == TOKEN + ":443":
         return "TEMPLATE"
+    if key == "$" + TOKEN + ":443":
+        return "DOUBLE_ESCAPED_TEMPLATE"
     if isinstance(domain, str) and domain and key.lower() == domain.lower() + ":443":
         return "IDENTITY"
     return "OTHER"
@@ -144,12 +146,17 @@ def main():
             active = json_cli(name, ["serve", "status", "--json"])
             mount_types = [m.get("Type") for m in c.get("Mounts", [])
                            if m.get("Destination") == target]
+            parent_bind = any(m.get("Type") == "bind" and
+                              isinstance(m.get("Destination"), str) and
+                              target.startswith(m["Destination"].rstrip("/") + "/")
+                              for m in c.get("Mounts", []))
             labels = c["Config"].get("Labels") or {}
             env = dict(x.split("=", 1) for x in c["Config"].get("Env", [])
                        if "=" in x)
             print(f"\n{name}:")
             print("  compose_sources:", len(files),
                   " config_mount_type:", mount_types[0] if len(mount_types) == 1 else "UNREPORTED",
+                  " parent_directory_bind:", parent_bind,
                   " configured_target_matches:", env.get("TS_SERVE_CONFIG") == target)
             print("  parsed_source:", masked_shape(source),
                   " mounted_file:", masked_shape(runtime),

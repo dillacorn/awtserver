@@ -196,7 +196,10 @@ def apply(env, selected, source):
             log = docker("logs", "--tail", "100", "freshdock",
                          check=False)
             text = (log.stdout + log.stderr).lower()
-            if "scheduler started" in text and "notification" in text:
+            if ("scheduler started" in text and
+                    "notification targets configured" in text and
+                    "no notification targets configured" not in text and
+                    "email(smtp)" in text):
                 break
         else:
             raise Refused("Freshdock scheduler/notification startup not verified")

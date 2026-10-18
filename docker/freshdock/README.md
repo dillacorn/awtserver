@@ -155,8 +155,12 @@ its contents or credentials and compares it against the currently rendered
 Compose `configs.content` value. Capability strings `CAP_NET_ADMIN` and
 `NET_ADMIN` are treated as equivalent (same for `NET_RAW`).
 
-For JSON configs, **only equivalent parsed JSON data** may differ in formatting,
-whitespace, or member order. Changed hostname keys, source values, or invalid
-JSON still block enrollment and are reported by category without disclosing
-sensitive values. No files in the running containers are modified by the
-preflight. This does not skip checks for non-JSON configs.
+For JSON configs, equivalent parsed JSON data may differ in formatting,
+whitespace or member order. **Tailscale also expands `\u0024{TS_CERT_DOMAIN}`**
+to its node's actual FQDN when applying the Serve configuration. When the
+template contains that placeholder, the preflight gets the DNSName from the
+*running sidecar's own* `tailscale status --json`, resolves the placeholder and
+requires the **entire parsed JSON document** to match the live config.
+A different hostname, HTTP proxy, Funnel setting, or JSON value blocks
+enrollment; no service config contents or credentials are printed. No files
+in the running containers are modified by the preflight.

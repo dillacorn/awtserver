@@ -115,9 +115,9 @@ class VerifiedEnrollmentTests(unittest.TestCase):
 
         def fake_run(argv, **kwargs):
             if argv[:3] == ["docker", "exec", "tailscale-freshrss"]:
-                if argv[3:] == ["status", "--json"]:
+                if argv[3:] == ["tailscale", "status", "--json"]:
                     return identity
-                if argv[3:] == ["serve", "status", "--json"]:
+                if argv[3:] == ["tailscale", "serve", "status", "--json"]:
                     return serve
             if argv[:3] == ["docker", "cp", "tailscale-freshrss:/config/serve.json"]:
                 return runtime_file

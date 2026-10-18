@@ -1,0 +1,24 @@
+name: Freshdock migration audit tests
+
+on:
+  pull_request:
+    paths:
+      - 'docker/freshdock/audit_migration.py'
+      - 'tests/test_freshdock_migration_audit.py'
+      - '.github/workflows/freshdock-migration-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/freshdock/audit_migration.py'
+      - 'tests/test_freshdock_migration_audit.py'
+      - '.github/workflows/freshdock-migration-audit.yml'
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Python syntax
+        run: python3 -m py_compile docker/freshdock/audit_migration.py tests/test_freshdock_migration_audit.py
+      - name: Run non-destructive audit tests
+        run: python3 -m unittest discover -s tests -p 'test_freshdock_migration_audit.py' -v

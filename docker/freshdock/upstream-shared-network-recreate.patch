@@ -1,0 +1,18 @@
+diff --git a/src/docker/recreate.rs b/src/docker/recreate.rs
+--- a/src/docker/recreate.rs
++++ b/src/docker/recreate.rs
+@@ -257,7 +257,13 @@ pub async fn recreate_one(
+     hooks: &LifecycleHooks,
+     ts_provider: impl Fn() -> i64,
+ ) -> Result<CycleOutcome, DockerError> {
+-    let spec = ops.inspect(name).await?;
++    let mut spec = ops.inspect(name).await?;
++    // The normal scheduler update needs the same Docker namespace-conflict
++    // cleanup as dependent reattachment. Config.Hostname is populated by
++    // Docker inspect even when network_mode=container:<parent>; forwarding
++    // it to create returns HTTP 400 and strands the old stopped archive.
++    // This is a no-op for ordinary network modes.
++    strip_shared_namespace_conflicts(&mut spec);
+     // Everything the daemon can rule out up front is ruled out here, while the
+     // container is still running and untouched — before even the pull, so a
+     // doomed update costs nothing.

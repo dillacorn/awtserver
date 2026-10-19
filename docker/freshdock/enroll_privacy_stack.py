@@ -24,6 +24,18 @@ PROJECT = "privacy"
 DIRECTORY = "/docker/privacy"
 SERVICES = ("gluetun", "transmission", "mullvad-browser")
 OTHER = ("tailscale-transmission", "tailscale-mullvad")
+# Independently verified from the production 21/21 enrollment report.
+# The WUD selection snapshot is provenance, not an authoritative rollup
+# of the subsequently reviewed eligibility exceptions and runtime labels.
+PREVIOUSLY_ENROLLED = frozenset((
+    "app-dockge", "app-flame", "app-ntfy", "audiobookshelf",
+    "brave", "freshrss", "hbbr", "hbbs", "jellyfin", "jellyseerr",
+    "mariadb_jellyseerr", "navidrome",
+    "tailscale-audiobookshelf", "tailscale-brave",
+    "tailscale-dockge", "tailscale-flame", "tailscale-freshrss",
+    "tailscale-jellyfin", "tailscale-jellyseerr",
+    "tailscale-navidrome", "tailscale-ntfy",
+))
 CRON = "45 2 * * *"
 OVERLAY = Path(DIRECTORY) / "compose.freshdock.yml"
 SNAPSHOTS = Path("/docker/freshdock/snapshots")
@@ -131,11 +143,16 @@ def plan():
                if labels(c).get("freshdock.enable") == "true"}
     need(len(already) == 21 and not (already & set(SERVICES + OTHER)),
          "Expected 21 previously enrolled apps and no privacy opt-ins")
-    chosen = audit.source_names(by_name) - {
-        "gluetun", "transmission", "mullvad-browser",
-        "vaultwarden", "nginx-vaultwarden"}
-    need(chosen == already,
-         "Enabled Freshdock set differs from saved original selection")
+    # The WUD historical selection and the actual reviewed 21/21 enrollment
+    # are distinct. Confirm the *exact* deployed set rather than deriving it
+    # from an obsolete pre-migration allowlist.
+    need(already == PREVIOUSLY_ENROLLED,
+         "Enabled Freshdock names differ from the verified 21-container fleet")
+    for name in PREVIOUSLY_ENROLLED:
+        need(by_name[name]["State"]["Status"] == "running" and
+             all(labels(by_name[name]).get(k) == v
+                 for k, v in policy().items()),
+             f"{name}: currently enrolled service state/policy drift")
     need(all(n in by_name for n in SERVICES + OTHER),
          "Privacy Compose project no longer has all five containers")
     for n in SERVICES + OTHER:

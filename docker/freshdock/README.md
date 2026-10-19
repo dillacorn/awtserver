@@ -137,6 +137,43 @@ The other 21 selected containers are candidates, **not guaranteed eligible**: li
 
 After repairing the five exclusions, reconstruct their canonical Compose sources, validate effective image/environment/mount/network configuration without displaying secrets, then explicitly enroll the intended services. No hidden global updater whitelist exists in Freshdock.
 
+## STOP: Freshdock v1.7.1 shared-namespace update bug (2026-10-19)
+
+A real 02:45 unattended update of `app-ntfy` **stopped and renamed**
+the application to `app-ntfy-old-1792392342`, then Docker rejected
+the proposed new container with:
+
+```text
+Docker responded with status code 400:
+conflicting options: hostname and the network mode
+```
+
+The Ntfy application was absent until the user ran a guarded restore that
+renamed/restarted the existing archive using its original image and data
+mounts, attached to the **unchanged, healthy** `tailscale-ntfy`.
+
+**Root cause:** upstream Freshdock v1.7.1's `recreate_one` uses the
+inspected/generated container `hostname` and `ExposedPorts` when updating
+containers with `network_mode: container:<id>`. Docker rejects those
+conflicting settings. Upstream's `strip_shared_namespace_conflicts` is
+only called in `reattach_one`, i.e. when repairing a child after its
+network-parent is updated, **not** during a child's own image update.
+Moreover, `swap_container` renames the old container before attempting
+the new create; an error can leave only the stopped archive.
+Source: https://github.com/Turbootzz/freshdock/blob/v1.7.1/src/docker/recreate.rs
+
+The existing 21-target deployment includes other apps sharing Tailscale
+network namespaces, which may encounter the same outage when an image
+updates. The proposed VPN trio shares Gluetun in the same way.
+
+**DO NOT RUN PRIVACY ENROLLMENT WITH `--apply` while v1.7.1 is installed.**
+The enrollment script intentionally refuses its apply mode until a fixed
+updater is vetted with disposable shared-namespace tests for update,
+dependent reattachment, create failure/restore, and rollback.
+Do not delete the restored application's volumes or rebuild its Tailscale
+network as a workaround. Existing unaffected apps may continue running even
+while the updater is stopped.
+
 ## Finish unattended updates for the VPN privacy trio
 
 **Production not yet enrolled.** On 2026-10-18, Transmission's stale
@@ -155,7 +192,8 @@ single-dependent reattachment. Two-dependent production update behavior
 has not yet been observed.
 
 Use `python3 docker/freshdock/enroll_privacy_stack.py` for a **read-only**
-preflight. On success, the same script with `--apply`:
+preflight. The `--apply` path is **hard-blocked** while the upstream bug is
+unresolved. When patched and verified, the intended apply sequence will:
 - Checks live Compose files/hashes, image IDs, mounts, runtime policy,
   healthy Gluetun routing and shared network namespace.
 - Creates `/docker/privacy/compose.freshdock.yml` for the three services

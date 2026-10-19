@@ -1,6 +1,0 @@
-.env
-store/
-*.sqlite
-*.db
-*.bak
-*.backup*

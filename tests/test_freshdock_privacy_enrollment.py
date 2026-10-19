@@ -151,6 +151,16 @@ class PrivacyEnrollmentTests(unittest.TestCase):
                 privacy.plan()
             c.assert_not_called()
 
+    def test_confirmed_v171_upstream_bug_blocks_privacy_apply(self):
+        with patch.object(privacy, "call") as docker, \
+             patch.object(privacy, "containers") as inspect:
+            with self.assertRaisesRegex(
+                privacy.Stop, "cannot safely auto-update shared-network"
+            ):
+                privacy.apply({}, (), {})
+            docker.assert_not_called()
+            inspect.assert_not_called()
+
     def test_parent_is_health_gated_before_clients(self):
         text = Path(privacy.__file__).read_text()
         parent = text.index('"--force-recreate", "gluetun"')

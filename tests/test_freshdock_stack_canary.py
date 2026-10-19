@@ -9,6 +9,14 @@ import freshdock_stack_canary as canary
 
 
 class CanarySafetyTests(unittest.TestCase):
+    def setUp(self):
+        # Preflight uses host-local maintenance hours. Fix test time so CI
+        # never accidentally runs these offline test cases in that window.
+        clock = patch.object(canary, "datetime")
+        obj = clock.start()
+        obj.now.return_value.strftime.return_value = "1200"
+        self.addCleanup(clock.stop)
+
     def test_child_uses_parent_network_not_host(self):
         yml = canary.compose_content("fdcanary-abc-parent", "fdcanary-abc-client")
         self.assertIn('network_mode: "service:parent"', yml)

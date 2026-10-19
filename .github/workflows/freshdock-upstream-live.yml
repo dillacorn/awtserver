@@ -1,0 +1,65 @@
+name: Freshdock live Docker namespace regressions
+
+on:
+  pull_request:
+    paths:
+      - 'docker/freshdock/upstream-shared-network-recreate.patch'
+      - 'tests/freshdock_upstream_live.py'
+      - '.github/workflows/freshdock-upstream-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  docker-updater:
+    name: Original failure then patched live scheduler
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+
+      - name: Clone exact upstream Freshdock 1.7.1
+        run: |
+          git clone --quiet https://github.com/Turbootzz/freshdock.git "$RUNNER_TEMP/freshdock"
+          git -C "$RUNNER_TEMP/freshdock" checkout --quiet d61b38d295d9bca4be9b0c9fd9d68624a731cb13
+          git -C "$RUNNER_TEMP/freshdock" apply --check "$GITHUB_WORKSPACE/docker/freshdock/upstream-shared-network-recreate.patch"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ runner.temp }}/freshdock
+
+      - name: Build original 1.7.1 unchanged
+        working-directory: ${{ runner.temp }}/freshdock
+        run: cargo build --locked --bin freshdock
+
+      - name: Reproduce Ntfy hostname/network conflict on real Docker
+        env:
+          GITHUB_ACTIONS: 'true'
+        run: |
+          python3 tests/freshdock_upstream_live.py \
+            --binary "$RUNNER_TEMP/freshdock/target/debug/freshdock" \
+            --stage original
+
+      - name: Apply reviewed upstream hotfix
+        run: |
+          git -C "$RUNNER_TEMP/freshdock" apply "$GITHUB_WORKSPACE/docker/freshdock/upstream-shared-network-recreate.patch"
+          git -C "$RUNNER_TEMP/freshdock" diff --check
+
+      - name: Rebuild patched Freshdock and run Rust library regressions
+        working-directory: ${{ runner.temp }}/freshdock
+        run: |
+          cargo test --locked --lib --quiet
+          cargo build --locked --bin freshdock
+
+      - name: Test direct client recreation, 2-child parent repair, real scheduler and rollback
+        env:
+          GITHUB_ACTIONS: 'true'
+        run: |
+          python3 tests/freshdock_upstream_live.py \
+            --binary "$RUNNER_TEMP/freshdock/target/debug/freshdock" \
+            --stage patched

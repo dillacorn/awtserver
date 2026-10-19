@@ -286,11 +286,30 @@ def patched_stage(binary):
         prior = {n: inspect(n)["Id"] for n in fixture.children}
         result = run([str(binary), "recreate", fixture.parent],
                      env=ci_env(), timeout=150)
-        print(result.stdout[-700:], flush=True)
+        print(result.stdout[-8000:], flush=True)
         require(inspect(fixture.parent)["Id"] != parent_before,
                 "Parent replacement did not occur")
-        require(all(inspect(n)["Id"] != prior[n] for n in fixture.children),
+        require(all(inspect(n) and inspect(n)["Id"] != prior[n]
+                    for n in fixture.children),
                 "One or both dependents not recreated with parent")
+        def dependents_healthy():
+            parent = inspect(fixture.parent)
+            return (running(parent) and all(
+                healthy(inspect(n)) and
+                namespace(inspect(n)) == "container:" + parent["Id"]
+                for n in fixture.children))
+        try:
+            wait_for(dependents_healthy, deadline=60,
+                     description="both dependents healthy after parent reattachment")
+        except RuntimeError:
+            for n in fixture.children:
+                c = inspect(n)
+                print("DEPENDENT DIAGNOSTIC", n,
+                      "state=", c and c.get("State"),
+                      "mode=", c and c["HostConfig"].get("NetworkMode"),
+                      "image=", c and c["Config"].get("Image"), flush=True)
+                print(docker("logs", "--tail", "30", n, check=False).stdout[-1200:])
+            raise
         fixture.assert_network()
         print("PASS: both children reattached to new parent", flush=True)
 

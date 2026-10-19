@@ -96,6 +96,14 @@ class PrivacyEnrollmentTests(unittest.TestCase):
             ):
                 privacy.plan()
 
+    def test_known_unsafe_updater_refuses_apply(self):
+        self.assertFalse(privacy.SHARED_NETWORK_AUTOUPDATE_VERIFIED)
+        with patch.object(privacy, "plan", return_value=({}, (), {})), \
+             patch.object(privacy, "apply") as update:
+            with patch("sys.argv", ["enroll_privacy_stack.py", "--apply"]):
+                self.assertEqual(privacy.main(), 1)
+            update.assert_not_called()
+
     def test_scope_and_label_policy(self):
         self.assertEqual(privacy.SERVICES,
                          ("gluetun", "transmission", "mullvad-browser"))

@@ -198,12 +198,29 @@ The narrow source patch is staged at
 `docker/freshdock/upstream-shared-network-recreate.patch`,
 pinned to upstream v1.7.1 commit
 `d61b38d295d9bca4be9b0c9fd9d68624a731cb13`.
-CI checks that it applies cleanly. **This patch is not installed on OMV,
-has not produced a custom image, and has not yet passed a live
-unattended-update regression.** Before enabling privacy auto-updates:
-build/obtain a corrected release, test normal update and rollback with
-isolated Compose namespace-sharing containers, validate Ntfy survives an
-update, then re-enable the guarded privacy enrollment.
+The [GitHub-hosted live Docker regression](https://github.com/dillacorn/omv-remote-dots/actions/runs/39243314665)
+**passed on 2026-10-19** using the pinned upstream code and reviewed patch.
+The runner compiled original v1.7.1 and reproduced the **exact Docker HTTP
+400 hostname/network-mode failure and stopped archived container**, then
+compiled the patched binary and verified all of the following on disposable
+Docker containers:
+- Direct recreation of a network-sharing child preserves its current
+  network parent and tagged image reference.
+- Parent recreation reattaches **two** namespace-sharing child containers.
+- A real Freshdock scheduler detects newer public Docker Hub image digests
+  over HTTPS, automatically updates **both** opted-in child containers and
+  preserves their parent namespace.
+- An unhealthy new image causes automatic rollback to healthy child containers.
+- Existing Rust library unit tests also pass. The Actions job concluded
+  **success**; no test was run on OMV.
+
+**This patch is still NOT installed on OMV and no patched production image
+has been built/deployed.** Ntfy was recovered using the original image
+separately. The privacy `--apply` path remains hard-blocked against v1.7.1.
+Before enabling privacy auto-updates, build/obtain a vetted corrected release,
+verify the executable/image deployed to OMV is patched, then explicitly
+remove the guard and run the audited enrollment. The disposable tests cannot
+replace final live Gluetun/VPN isolation verification.
 
 ## Finish unattended updates for the VPN privacy trio
 

@@ -98,6 +98,15 @@ class PrivacyEnrollmentTests(unittest.TestCase):
                 privacy.plan()
             c.assert_not_called()
 
+    def test_parent_is_health_gated_before_clients(self):
+        text = Path(privacy.__file__).read_text()
+        parent = text.index('"--force-recreate", "gluetun"')
+        health_gate = text.index('raise Stop("Recreated Gluetun did not become VPN healthy")')
+        clients = text.index('"transmission", "mullvad-browser", timeout=240')
+        self.assertLess(parent, health_gate)
+        self.assertLess(health_gate, clients)
+        self.assertGreaterEqual(text.count('"--no-deps"'), 2)
+
     def test_safety_properties_in_source(self):
         text = Path(privacy.__file__).read_text()
         self.assertIn('"--pull", "never"', text)

@@ -17,14 +17,39 @@ class PrivacyEnrollmentTests(unittest.TestCase):
         obj.now.return_value.strftime.return_value = "1200"
         self.addCleanup(clock.stop)
 
-    def test_exact_previously_verified_fleet(self):
-        self.assertEqual(len(privacy.PREVIOUSLY_ENROLLED), 21)
-        self.assertNotIn("gluetun", privacy.PREVIOUSLY_ENROLLED)
-        self.assertNotIn("transmission", privacy.PREVIOUSLY_ENROLLED)
-        self.assertNotIn("mullvad-browser", privacy.PREVIOUSLY_ENROLLED)
-        self.assertNotIn("vaultwarden", privacy.PREVIOUSLY_ENROLLED)
-        self.assertEqual(len(privacy.PREVIOUSLY_ENROLLED |
-                             set(privacy.SERVICES)), 24)
+    def test_uses_live_opted_in_fleet_without_hardcoded_names(self):
+        policy = privacy.policy()
+        own = {
+            "com.docker.compose.project": "existing",
+            "com.docker.compose.service": "service",
+            "com.docker.compose.project.working_dir": "/docker/existing",
+            "com.docker.compose.project.config_files": "/docker/existing/compose.yml",
+        }
+        fleet = {}
+        for i in range(21):
+            fleet[f"selected-{i:02d}"] = {
+                "State": {"Status": "running", "Paused": False},
+                "Config": {"Labels": own | policy},
+            }
+        fleet["freshdock"] = {
+            "State": {"Status": "running"},
+            "Config": {
+                "Image": "ghcr.io/turbootzz/freshdock:1.7.1",
+                "Env": ["FRESHDOCK_WATCH_ALL=false",
+                        "FRESHDOCK_COMPOSE_AWARE=true"],
+                "Labels": {},
+            },
+        }
+        with patch.object(privacy.os, "geteuid", return_value=0), \
+             patch.object(privacy.socket, "gethostname",
+                          return_value="openmediavault"), \
+             patch.object(privacy, "containers", return_value=fleet), \
+             patch.object(privacy.Path, "is_file", return_value=True):
+            with self.assertRaisesRegex(
+                privacy.Stop,
+                "Privacy Compose project no longer has all five containers"
+            ):
+                privacy.plan()
 
     def test_scope_and_label_policy(self):
         self.assertEqual(privacy.SERVICES,

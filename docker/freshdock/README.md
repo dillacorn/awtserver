@@ -127,15 +127,52 @@ Delivery still needs confirmation in the destination mailbox.
 
 | Container | Why not automatically enrolled yet |
 |---|---|
-| `gluetun` | VPN network parent; requires actual tunnel, firewall/kill-switch and egress validation |
-| `transmission` | **Paused with stale Gluetun network attachment**; do not unpause directly |
-| `mullvad-browser` | Shares Gluetun's network; needs end-to-end fail-closed validation |
+| `gluetun` | VPN parent passed live routing/kill-switch tests; final Freshdock opt-in pending |
+| `transmission` | Now running on current Gluetun namespace; final Freshdock opt-in pending |
+| `mullvad-browser` | Shares verified Gluetun namespace; simulated tunnel failure test passed, Freshdock opt-in pending |
 | `vaultwarden` | Legacy running password-manager service has no recoverable Compose source |
 | `nginx-vaultwarden` | Legacy Nginx service has no recoverable Compose source |
 
 The other 21 selected containers are candidates, **not guaranteed eligible**: live hash checks can stop the migration to prevent unrelated drift. This is why both stages have a read-only preflight and a separate apply mode.
 
 After repairing the five exclusions, reconstruct their canonical Compose sources, validate effective image/environment/mount/network configuration without displaying secrets, then explicitly enroll the intended services. No hidden global updater whitelist exists in Freshdock.
+
+## Finish unattended updates for the VPN privacy trio
+
+**Production not yet enrolled.** On 2026-10-18, Transmission's stale
+Gluetun namespace was repaired, both applications were confirmed accessible,
+and a live fail-closed tunnel-down test blocked IPv4, recovered the VPN,
+and resumed both applications. IPv6 had no baseline connectivity.
+
+The already-enrolled 21 services continue updating at 02:45. This final
+scope adds exactly Gluetun, Transmission and Mullvad Browser for **24 total**.
+
+Freshdock v1.7.1 has Compose-aware rollouts and reattaches namespace-sharing
+dependents when Gluetun's container is replaced. Its reattachment operation
+is best-effort: a failed repair is logged as a warning, not a rollback.
+The existing disposable canaries confirmed automatic updates, rollback and
+single-dependent reattachment. Two-dependent production update behavior
+has not yet been observed.
+
+Use `python3 docker/freshdock/enroll_privacy_stack.py` for a **read-only**
+preflight. On success, the same script with `--apply`:
+- Checks live Compose files/hashes, image IDs, mounts, runtime policy,
+  healthy Gluetun routing and shared network namespace.
+- Creates `/docker/privacy/compose.freshdock.yml` for the three services
+  only; Tailscale web proxy sidecars are not enrolled or recreated.
+- Writes a private 0600 inspect snapshot before service recreation.
+- Uses existing images without pulling/building; stops both applications
+  before recreating the three selected services.
+- Verifies healthy Gluetun, `tun0` routing, correct namespace attachment,
+  and 24 precisely enrolled Freshdock containers.
+- On a partial failure, stops the two privacy applications and Freshdock
+  rather than risking unattended updates of an unverified VPN stack.
+
+**Include `/docker/privacy/compose.freshdock.yml` as the final Compose
+`-f` source in future Dockge/manual recreations.** This is the same
+overlay practice used for the other 21 enrolled containers.
+
+Legacy Vaultwarden/Nginx stays excluded pending separate review.
 
 ## SMTP and scheduling
 

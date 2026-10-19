@@ -65,6 +65,45 @@ def namespace(c):
     return os.readlink(f"/proc/{pid}/ns/net") if pid else None
 
 
+ARCHIVE_NAME = re.compile(r"^(?P<owner>.+)-old-[0-9]{10}$")
+
+
+def current_enrolled(by_name):
+    """Return actual opted-in containers, not Freshdock's stopped archives.
+
+    An update archive inherits the prior opt-in labels and Compose identity.
+    Ignore only a stopped archive with an existing running successor bearing
+    matching Compose project/service metadata. Anything else is suspicious.
+    """
+    enabled = {name: c for name, c in by_name.items()
+               if labels(c).get("freshdock.enable") == "true"}
+    current = set()
+    archived = []
+    for name, c in sorted(enabled.items()):
+        old = ARCHIVE_NAME.fullmatch(name)
+        if old is None:
+            current.add(name)
+            continue
+        owner = old.group("owner")
+        successor = by_name.get(owner)
+        need(c["State"].get("Status") == "exited" and
+             not c["State"].get("Paused"),
+             f"{name}: old update archive is not stopped; manual review required")
+        need(successor is not None and
+             successor["State"].get("Status") == "running" and
+             labels(successor).get("freshdock.enable") == "true",
+             f"{name}: no running Freshdock-enabled replacement")
+        for key in ("com.docker.compose.project", "com.docker.compose.service"):
+            need(labels(c).get(key) and
+                 labels(c).get(key) == labels(successor).get(key),
+                 f"{name}: archive/replacement Compose identity mismatch")
+        archived.append(name)
+    if archived:
+        print("NOTICE: Ignored stopped Freshdock archives for counting:",
+              ", ".join(archived), flush=True)
+    return current
+
+
 def healthy_vpn(c):
     if c["State"].get("Status") != "running":
         return False
@@ -127,8 +166,7 @@ def plan():
     need(env.get("FRESHDOCK_WATCH_ALL") == "false" and
          env.get("FRESHDOCK_COMPOSE_AWARE") == "true",
          "Freshdock must use scoped Compose-aware mode")
-    already = {n for n, c in by_name.items()
-               if labels(c).get("freshdock.enable") == "true"}
+    already = current_enrolled(by_name)
     need(len(already) == 21 and not (already & set(SERVICES + OTHER)),
          "Expected 21 previously enrolled apps and no privacy opt-ins")
     # The earlier 21/21 production audit established the count and update
@@ -248,10 +286,8 @@ def verify_after(before):
         need(now.get(name) and now[name]["Id"] == c["Id"] and
              now[name]["State"]["Status"] == c["State"]["Status"],
              f"{name}: unrelated container changed")
-    current = {n for n, c in now.items()
-               if labels(c).get("freshdock.enable") == "true"}
-    originally = {n for n, c in before.items()
-                  if labels(c).get("freshdock.enable") == "true"}
+    current = current_enrolled(now)
+    originally = current_enrolled(before)
     need(current == originally | set(SERVICES) and len(current) == 24,
          "Expected exactly 24 opted-in apps")
 

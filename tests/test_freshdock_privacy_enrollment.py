@@ -10,6 +10,13 @@ import enroll_privacy_stack as privacy
 
 
 class PrivacyEnrollmentTests(unittest.TestCase):
+    def setUp(self):
+        # Deterministic time for offline preflight tests, including UTC CI.
+        clock = patch.object(privacy, "datetime")
+        obj = clock.start()
+        obj.now.return_value.strftime.return_value = "1200"
+        self.addCleanup(clock.stop)
+
     def test_scope_and_label_policy(self):
         self.assertEqual(privacy.SERVICES,
                          ("gluetun", "transmission", "mullvad-browser"))

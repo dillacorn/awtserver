@@ -3,7 +3,7 @@ import json
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "docker" / "freshdock"))
 import enroll_privacy_stack as privacy
@@ -51,7 +51,7 @@ class PrivacyEnrollmentTests(unittest.TestCase):
     def test_existing_overlay_is_a_hard_stop(self):
         with patch.object(privacy.os, "geteuid", return_value=0), \
              patch.object(privacy.socket, "gethostname", return_value="openmediavault"), \
-             patch.object(privacy.OVERLAY, "exists", return_value=True), \
+             patch.object(privacy, "OVERLAY", Mock(**{"exists.return_value": True})), \
              patch.object(privacy, "containers") as c:
             with self.assertRaisesRegex(privacy.Stop, "Existing privacy"):
                 privacy.plan()

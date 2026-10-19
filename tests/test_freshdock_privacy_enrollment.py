@@ -17,6 +17,15 @@ class PrivacyEnrollmentTests(unittest.TestCase):
         obj.now.return_value.strftime.return_value = "1200"
         self.addCleanup(clock.stop)
 
+    def test_exact_previously_verified_fleet(self):
+        self.assertEqual(len(privacy.PREVIOUSLY_ENROLLED), 21)
+        self.assertNotIn("gluetun", privacy.PREVIOUSLY_ENROLLED)
+        self.assertNotIn("transmission", privacy.PREVIOUSLY_ENROLLED)
+        self.assertNotIn("mullvad-browser", privacy.PREVIOUSLY_ENROLLED)
+        self.assertNotIn("vaultwarden", privacy.PREVIOUSLY_ENROLLED)
+        self.assertEqual(len(privacy.PREVIOUSLY_ENROLLED |
+                             set(privacy.SERVICES)), 24)
+
     def test_scope_and_label_policy(self):
         self.assertEqual(privacy.SERVICES,
                          ("gluetun", "transmission", "mullvad-browser"))

@@ -28,6 +28,13 @@ CRON = "45 2 * * *"
 OVERLAY = Path(DIRECTORY) / "compose.freshdock.yml"
 SNAPSHOTS = Path("/docker/freshdock/snapshots")
 
+# Do not allow a known-vulnerable Freshdock updater to manage VPN sidecars.
+# v1.7.1's direct recreate path preserves a generated hostname/ExposedPorts
+# with network_mode=container:<id>, causing Docker 400 after stop/rename.
+# Update this gate ONLY after a fixed updater has passed full regression and
+# a real disposable namespace update + rollback canary.
+SHARED_NETWORK_AUTOUPDATE_VERIFIED = False
+
 
 class Stop(RuntimeError):
     pass
@@ -385,8 +392,14 @@ def main():
         print("PASS: Current VPN namespace, Compose hashes, images and mounts match.")
         print("PASS: Existing 21 Freshdock opt-ins unchanged.")
         if not args.apply:
-            print("READ ONLY: Use --apply for the reviewed privacy enrollment.")
+            print("READ ONLY: Production changes blocked until Freshdock's "
+                  "shared-network recreate bug is corrected and validated.")
         else:
+            need(SHARED_NETWORK_AUTOUPDATE_VERIFIED,
+                 "Unsafe Freshdock v1.7.1 recreates container-network clients "
+                 "with an invalid hostname; restore-on-create-failure is also "
+                 "not reliable. Privacy opt-in BLOCKED pending fixed updater "
+                 "and disposable regression tests.")
             apply(before, files, tree)
         return 0
     except (Stop, audit.Stop, verified.Refused, base.Stop,

@@ -82,13 +82,14 @@ def ci_env():
 
 
 class Fixture:
-    def __init__(self, stage):
+    def __init__(self, stage, public=False):
         self.stage = stage
+        self.public = public
         self.id = "fdci" + uuid.uuid4().hex[:9]
         self.parent = self.id + "-parent"
         self.children = [self.id + "-childa", self.id + "-childb"]
         self.registry = self.id + "-registry"
-        self.tag = f"localhost:5000/{self.id}/app:latest"
+        self.tag = "alpine:3.20" if public else f"localhost:5000/{self.id}/app:latest"
         self.temp = tempfile.TemporaryDirectory(prefix=self.id + "-")
         self.folder = Path(self.temp.name)
         self.compose_file = self.folder / "compose.yml"
@@ -117,14 +118,28 @@ class Fixture:
 
     def __enter__(self):
         docker("pull", IMAGE, timeout=300)
-        docker("pull", REGISTRY_IMAGE, timeout=300)
-        docker("run", "-d", "--name", self.registry, "--rm",
-               "-p", "127.0.0.1:5000:5000", REGISTRY_IMAGE)
-        wait_for(lambda: run(
-            ["curl", "-fsS", "http://127.0.0.1:5000/v2/"],
-            timeout=10, check=False).returncode == 0,
-            description="disposable local registry", deadline=20)
-        self.build("old")
+        if self.public:
+            # Registry digest checks in Freshdock use HTTPS. A local HTTP
+            # registry works for docker pull/push but not its reqwest probe.
+            # Test real scheduled updates against Docker Hub's public Alpine
+            # tags, initially forcing the older 3.20.0 image behind :3.20.
+            docker("pull", "alpine:3.20", timeout=300)
+            self.expected_new = image_id("alpine:3.20")
+            old_id = image_id(IMAGE)
+            require(self.expected_new != old_id,
+                    "Docker Hub alpine:3.20 no longer differs from 3.20.0")
+            docker("tag", IMAGE, self.tag)
+        else:
+            docker("pull", REGISTRY_IMAGE, timeout=300)
+            docker("run", "-d", "--name", self.registry, "--rm",
+                   "-p", "127.0.0.1:5000:5000", REGISTRY_IMAGE)
+            wait_for(lambda: run(
+                ["curl", "-fsS", "http://127.0.0.1:5000/v2/"],
+                timeout=10, check=False).returncode == 0,
+                description="disposable local registry", deadline=20)
+            self.build("old")
+        health_command = ("test -r /etc/alpine-release"
+                          if self.public else "test -f /ci-healthy")
         self.compose_file.write_text(f"""services:
   parent:
     image: {IMAGE}
@@ -147,7 +162,7 @@ class Fixture:
       freshdock.mode: "live"
       freshdock.notify: "false"
     healthcheck:
-      test: ["CMD-SHELL", "test -f /ci-healthy"]
+      test: ["CMD-SHELL", "{health_command}"]
       interval: 2s
       timeout: 2s
       retries: 3
@@ -164,7 +179,7 @@ class Fixture:
       freshdock.mode: "live"
       freshdock.notify: "false"
     healthcheck:
-      test: ["CMD-SHELL", "test -f /ci-healthy"]
+      test: ["CMD-SHELL", "{health_command}"]
       interval: 2s
       timeout: 2s
       retries: 3
@@ -243,7 +258,11 @@ class Fixture:
                      check=False).stdout.split()
         if ids:
             docker("rm", "-f", *ids, check=False)
-        docker("rm", "-f", self.registry, check=False)
+        if not self.public:
+            docker("rm", "-f", self.registry, check=False)
+        else:
+            # Restore Docker Hub's moving tag on the ephemeral runner.
+            docker("pull", self.tag, timeout=300, check=False)
         self.temp.cleanup()
 
 
@@ -268,15 +287,15 @@ def original_stage(binary):
 
 
 def patched_stage(binary):
-    print("===== PATCHED Freshdock real Docker regression =====", flush=True)
-    with Fixture("patched") as fixture:
+    print("===== PATCHED Freshdock: direct updates and parent repair =====", flush=True)
+    with Fixture("patched-direct") as fixture:
         parent_before = inspect(fixture.parent)["Id"]
         first = fixture.children[0]
 
         print("TEST 1: direct recreation of network-sharing child", flush=True)
         initial_id = inspect(first)["Id"]
         result = run([str(binary), "recreate", first], env=ci_env(), timeout=150)
-        print(result.stdout[-700:], flush=True)
+        print(result.stdout[-1500:], flush=True)
         require(inspect(first)["Id"] != initial_id,
                 "Direct child update did not recreate container")
         fixture.assert_network()
@@ -298,59 +317,80 @@ def patched_stage(binary):
                 healthy(inspect(n)) and
                 namespace(inspect(n)) == "container:" + parent["Id"]
                 for n in fixture.children))
-        try:
-            wait_for(dependents_healthy, deadline=60,
-                     description="both dependents healthy after parent reattachment")
-        except RuntimeError:
-            for n in fixture.children:
-                c = inspect(n)
-                print("DEPENDENT DIAGNOSTIC", n,
-                      "state=", c and c.get("State"),
-                      "mode=", c and c["HostConfig"].get("NetworkMode"),
-                      "image=", c and c["Config"].get("Image"), flush=True)
-                print(docker("logs", "--tail", "30", n, check=False).stdout[-1200:])
-            raise
+        wait_for(dependents_healthy, deadline=60,
+                 description="both dependents healthy after parent reattachment")
         fixture.assert_network()
         print("PASS: both children reattached to new parent", flush=True)
 
-        print("TEST 3: real scheduler automatically updates both child images",
+    print("===== PATCHED Freshdock: REAL scheduled updates and rollback =====",
+          flush=True)
+    with Fixture("patched-scheduler", public=True) as fixture:
+        print("TEST 3: real scheduler automatically updates BOTH children",
               flush=True)
+        first = fixture.children[0]
+        before = {n: inspect(n)["Id"] for n in fixture.children}
         old_image = inspect(first)["Image"]
-        new_image = fixture.build("new")
-        require(new_image != old_image, "Image did not change")
+        require(old_image != fixture.expected_new,
+                "Expected initial image to be behind Docker Hub tag")
         fixture.start_daemon(binary)
 
         def have_update():
             try:
                 fixture.assert_network()
-                return all(inspect(n)["Image"] == new_image for n in fixture.children)
+                return all(inspect(n)["Image"] == fixture.expected_new and
+                           inspect(n)["Id"] != before[n]
+                           for n in fixture.children)
             except (RuntimeError, KeyError, TypeError):
                 return False
-        wait_for(have_update, deadline=140,
+        wait_for(have_update, deadline=160,
                  description="both auto-updated child containers")
         fixture.assert_network()
-        print("PASS: scheduler updated BOTH children and retained tag refs",
+        print("PASS: scheduler updated both children with public HTTPS registry",
               flush=True)
 
-        print("TEST 4: force unhealthy release; verify automatic rollback",
-              flush=True)
-        good = {n: inspect(n)["Image"] for n in fixture.children}
-        bad_image = fixture.build("bad")
-        require(bad_image != new_image, "Bad release did not change image")
-        wait_for(lambda: ("roll" in fixture.daemon_log().lower() and
-                          all(healthy(inspect(n)) and
-                              inspect(n)["Image"] == good[n]
-                              for n in fixture.children)),
-                 deadline=180, description="automatic healthy rollback")
+        # Stop scheduler, restore the stale image to the local moving tag,
+        # and recreate ONLY disposable clients with a health check requiring
+        # the original 3.20.0 bits. An automatic pull of the current 3.20
+        # release now starts but fails health and must roll back.
+        fixture.daemon.terminate()
+        fixture.daemon.wait(timeout=25)
+        fixture.daemon = None
+        fixture.daemon_file.close()
+        del fixture.daemon_file
+        docker("tag", IMAGE, fixture.tag)
+        compose_text = fixture.compose_file.read_text()
+        expected = "test -r /etc/alpine-release"
+        require(compose_text.count(expected) == 2,
+                "Unexpected Compose fixture health settings")
+        fixture.compose_file.write_text(compose_text.replace(
+            expected, "grep -qx 3.20.0 /etc/alpine-release"))
+        run(fixture.compose() + ["up", "-d", "--no-deps", "--force-recreate",
+                                 "--no-build", "--pull", "never",
+                                 "childa", "childb"], timeout=140)
+        wait_for(lambda: all(healthy(inspect(n)) for n in fixture.children),
+                 deadline=55, description="pre-rollback old image healthy")
         fixture.assert_network()
-        print("PASS: unhealthy release rolled back without stranding clients",
+        good = {n: inspect(n)["Image"] for n in fixture.children}
+        require(all(value == old_image for value in good.values()),
+                "Rollback stage not reset to old image")
+        print("TEST 4: automatic health failure must restore both children",
               flush=True)
-        # Note that a failed digest remains available and may be retried;
-        # the test proves correct restoration for this run, not backoff policy.
+        fixture.start_daemon(binary)
+
+        def rolled_back():
+            logs = fixture.daemon_log().lower()
+            return (("rolled back" in logs or "rollback" in logs) and
+                    all(healthy(inspect(n)) and
+                        inspect(n)["Image"] == good[n]
+                        for n in fixture.children))
+        wait_for(rolled_back, deadline=210, description="automatic rollback")
+        fixture.assert_network()
         logs = fixture.daemon_log().lower()
-        require("failed to re-attach" not in logs and
-                "conflicting options" not in logs,
-                "Scheduler logged namespace conflict/reattach failure")
+        require("conflicting options" not in logs and
+                "failed to re-attach" not in logs,
+                "Scheduler logged namespace or reattachment failure")
+        print("PASS: unhealthy Docker Hub update rolled back to healthy clients",
+              flush=True)
         print("ALL PATCHED LIVE DOCKER TESTS PASSED", flush=True)
 
 

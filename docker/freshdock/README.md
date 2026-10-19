@@ -162,9 +162,12 @@ preflight. On success, the same script with `--apply`:
   only; Tailscale web proxy sidecars are not enrolled or recreated.
 - Writes a private 0600 inspect snapshot before service recreation.
 - Uses existing images without pulling/building; stops both applications
-  before recreating the three selected services.
-- Verifies healthy Gluetun, `tun0` routing, correct namespace attachment,
-  and 24 precisely enrolled Freshdock containers.
+  before recreating **only Gluetun**, then waits for its verified VPN health
+  before recreating Transmission and Mullvad Browser with `--no-deps`.
+- Validates the **actual 21 running Freshdock enrollments**, not guessed
+  container names or the retired WUD watcher selection.
+- Verifies healthy Gluetun, `tun0` routing, preserved mounts, correct
+  namespace attachment, and 24 precisely enrolled Freshdock containers.
 - On a partial failure, stops the two privacy applications and Freshdock
   rather than risking unattended updates of an unverified VPN stack.
 

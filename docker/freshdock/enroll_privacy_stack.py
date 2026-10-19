@@ -131,6 +131,11 @@ def plan():
                if labels(c).get("freshdock.enable") == "true"}
     need(len(already) == 21 and not (already & set(SERVICES + OTHER)),
          "Expected 21 previously enrolled apps and no privacy opt-ins")
+    chosen = audit.source_names(by_name) - {
+        "gluetun", "transmission", "mullvad-browser",
+        "vaultwarden", "nginx-vaultwarden"}
+    need(chosen == already,
+         "Enabled Freshdock set differs from saved original selection")
     need(all(n in by_name for n in SERVICES + OTHER),
          "Privacy Compose project no longer has all five containers")
     for n in SERVICES + OTHER:
@@ -216,9 +221,9 @@ def verify_after(before):
              f"{name}: unrelated container changed")
     current = {n for n, c in now.items()
                if labels(c).get("freshdock.enable") == "true"}
-    need(current == {n for n, c in before.items()
-                     if labels(c).get("freshdock.enable") == "true"} |
-         set(SERVICES) and len(current) == 24,
+    originally = {n for n, c in before.items()
+                  if labels(c).get("freshdock.enable") == "true"}
+    need(current == originally | set(SERVICES) and len(current) == 24,
          "Expected exactly 24 opted-in apps")
 
 

@@ -170,15 +170,17 @@ def plan():
         c = by_name[n]
         need(c["HostConfig"]["NetworkMode"] == "container:" + g["Id"] and
              namespace(c) == ns, f"{n}: VPN namespace drifted")
-    # Two independent Tailscale web proxies must remain untouched.
+    # The three targets need identical, current Compose sources. The two
+    # Tailscale proxies are deliberately outside the operation and can have
+    # older Compose provenance without making the target source ambiguous.
     files = None
-    for n in SERVICES + OTHER:
+    for n in SERVICES:
         key, svc = audit.source_group(by_name[n])
         project, directory, origins = key
         need((project, directory, svc) == (PROJECT, DIRECTORY, n),
              f"{n}: unexpected source ownership")
         need(files is None or files == origins,
-             f"{n}: active Compose file set differs")
+             f"{n}: active Compose source set differs")
         files = origins
     need(files and all(str(f).startswith(DIRECTORY + "/") for f in files),
          "Compose files not under expected directory")
@@ -215,6 +217,18 @@ def verify_after(before):
         need(c and c["State"]["Status"] == "running" and
              c["Image"] == before[name]["Image"],
              f"{name}: image ID or running state differs")
+        old_mounts = {
+            m["Destination"]: (m["Type"], m.get("Source"),
+                               bool(m.get("RW")))
+            for m in before[name].get("Mounts", [])
+        }
+        new_mounts = {
+            m["Destination"]: (m["Type"], m.get("Source"),
+                               bool(m.get("RW")))
+            for m in c.get("Mounts", [])
+        }
+        need(old_mounts == new_mounts,
+             f"{name}: persistent mounts or access policy changed")
         need(all(labels(c).get(k) == v for k, v in policy().items()),
              f"{name}: missing nightly update labels")
         need(namespace(c) == ns, f"{name}: not on Gluetun namespace")
@@ -268,26 +282,51 @@ def apply(before, files, tree):
         print("PASS: Private snapshot and label-only Compose overlay verified.",
               flush=True)
         changed = True
-        # No torrent/browser traffic during Gluetun's network replacement.
+        # Keep torrent/browser traffic off throughout the parent replacement.
         call("docker", "stop", "--time", "20", "transmission", "mullvad-browser",
              timeout=60)
-        print("Clients stopped. Recreating only the three approved services...",
+        print("Clients stopped. Recreating only Gluetun first...",
               flush=True)
-        call(*updated_cmd, "up", "-d", "--no-build", "--pull", "never",
-             "--force-recreate", *SERVICES, timeout=240)
-        for i in range(75):
+        call(*updated_cmd, "up", "-d", "--no-deps", "--no-build",
+             "--pull", "never", "--force-recreate", "gluetun",
+             timeout=240)
+        deadline = time.monotonic() + 150
+        while time.monotonic() < deadline:
+            gluetun = containers().get("gluetun")
+            if gluetun and healthy_vpn(gluetun):
+                break
+            time.sleep(2)
+        else:
+            raise Stop("Recreated Gluetun did not become VPN healthy")
+        # --no-deps cannot recreate Tailscale proxies; the Gluetun parent
+        # already passed its health check before either client starts.
+        print("VPN healthy. Recreating Transmission and Mullvad Browser...",
+              flush=True)
+        call(*updated_cmd, "up", "-d", "--no-deps", "--no-build",
+             "--pull", "never", "--force-recreate",
+             "transmission", "mullvad-browser", timeout=240)
+        deadline = time.monotonic() + 150
+        while time.monotonic() < deadline:
             now = containers()
             if (now.get("gluetun") and healthy_vpn(now["gluetun"]) and
                     all(now.get(n) and now[n]["State"]["Status"] == "running"
                         for n in SERVICES)):
                 break
             time.sleep(2)
+        else:
+            raise Stop("Privacy clients did not become running after VPN restoration")
         verify_after(before)
         print("PASS: 24/24 enabled, VPN healthy, both clients attached; "
               "Tailscale proxies and existing images preserved.", flush=True)
         print("PASS: All three privacy containers now receive automatic "
               "nightly updates at 02:45.", flush=True)
     except (Exception, KeyboardInterrupt):
+        if not changed:
+            # Overlay is created by this invocation only (preflight rejects an
+            # existing path), so a failed validation can safely clean it up.
+            # No container has been touched in this case.
+            if OVERLAY.is_file() and not OVERLAY.is_symlink():
+                OVERLAY.unlink()
         if changed:
             # Do not let partially labelled privacy clients run on an unverified
             # namespace or let the daemon update an incomplete privacy rollout.

@@ -37,6 +37,13 @@ def fake_docker(args, **kwargs):
 
 
 class SafetyTests(unittest.TestCase):
+    def setUp(self):
+        # Host local time matters for real tests, not offline CI fixtures.
+        clock = patch.object(canary, "datetime")
+        obj = clock.start()
+        obj.now.return_value.strftime.return_value = "1200"
+        self.addCleanup(clock.stop)
+
     def test_uses_pinned_freshdock_and_separate_old_and_moving_images(self):
         self.assertEqual(canary.FRESHDOCK_IMAGE,
                          "ghcr.io/turbootzz/freshdock:1.7.1")

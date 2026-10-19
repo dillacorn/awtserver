@@ -174,6 +174,37 @@ Do not delete the restored application's volumes or rebuild its Tailscale
 network as a workaround. Existing unaffected apps may continue running even
 while the updater is stopped.
 
+## Confirmed upstream updater defect: network-sharing application updates
+
+On 2026-10-19 at the first live 02:45 scheduler run, Freshdock v1.7.1
+**stopped and renamed** `app-ntfy` but Docker rejected the replacement
+with `HTTP 400: conflicting options: hostname and the network mode`.
+The original Ntfy app was restored using its retained container and was
+verified running in the existing healthy `tailscale-ntfy` namespace.
+
+**Do not use the privacy `--apply` enrollment yet**. Its apply entrypoint
+now explicitly blocks v1.7.1, even if the read-only preflight passes.
+Affected scope extends to **all** `network_mode: service:...` applications,
+including the existing nine Tailscale application sidecars and the intended
+Gluetun-protected Transmission/Mullvad Browser clients.
+
+Root cause: upstream `src/docker/recreate.rs` already implements
+`strip_shared_namespace_conflicts()` and invokes it for *dependent
+reattachment*, but fails to call it in the normal scheduled `recreate_one`
+path. The ordinary `ContainerSpec` retains an inspected hostname, which
+Docker refuses for `network_mode: container:<parent>`.
+
+The narrow source patch is staged at
+`docker/freshdock/upstream-shared-network-recreate.patch`,
+pinned to upstream v1.7.1 commit
+`d61b38d295d9bca4be9b0c9fd9d68624a731cb13`.
+CI checks that it applies cleanly. **This patch is not installed on OMV,
+has not produced a custom image, and has not yet passed a live
+unattended-update regression.** Before enabling privacy auto-updates:
+build/obtain a corrected release, test normal update and rollback with
+isolated Compose namespace-sharing containers, validate Ntfy survives an
+update, then re-enable the guarded privacy enrollment.
+
 ## Finish unattended updates for the VPN privacy trio
 
 **Production not yet enrolled.** On 2026-10-18, Transmission's stale

@@ -166,6 +166,10 @@ preflight. On success, the same script with `--apply`:
   before recreating Transmission and Mullvad Browser with `--no-deps`.
 - Validates the **actual 21 running Freshdock enrollments**, not guessed
   container names or the retired WUD watcher selection.
+- Excludes Freshdock's inherited-label `*-old-<timestamp>` containers
+  from live counts **only** when each is stopped and has a running
+  replacement with matching Compose identity. It never deletes old archives
+  or silently accepts an active/unmatched archive.
 - Verifies healthy Gluetun, `tun0` routing, preserved mounts, correct
   namespace attachment, and 24 precisely enrolled Freshdock containers.
 - On a partial failure, stops the two privacy applications and Freshdock

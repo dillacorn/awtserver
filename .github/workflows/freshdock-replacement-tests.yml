@@ -42,5 +42,10 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_freshdock_verified_enrollment.py' -v
       - name: Privacy stack enrollment safety tests
         run: python3 -m unittest discover -s tests -p 'test_freshdock_privacy_enrollment.py' -v
+      - name: Validate pinned upstream shared-network hotfix applies
+        run: |
+          git clone --quiet https://github.com/Turbootzz/freshdock.git "$RUNNER_TEMP/freshdock-upstream"
+          git -C "$RUNNER_TEMP/freshdock-upstream" checkout --quiet d61b38d295d9bca4be9b0c9fd9d68624a731cb13
+          git -C "$RUNNER_TEMP/freshdock-upstream" apply --check "$GITHUB_WORKSPACE/docker/freshdock/upstream-shared-network-recreate.patch"
       - name: Validate Freshdock Compose syntax
         run: docker compose -f docker/freshdock/compose.yml config --quiet

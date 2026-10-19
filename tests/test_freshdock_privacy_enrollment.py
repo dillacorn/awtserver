@@ -17,6 +17,51 @@ class PrivacyEnrollmentTests(unittest.TestCase):
         obj.now.return_value.strftime.return_value = "1200"
         self.addCleanup(clock.stop)
 
+    def test_stopped_archives_are_not_active_enrollment(self):
+        base = {
+            "freshdock.enable": "true",
+            "com.docker.compose.project": "ntfy",
+            "com.docker.compose.service": "application",
+        }
+        current = {"Name": "/app-ntfy",
+                   "State": {"Status": "running"},
+                   "Config": {"Labels": dict(base)}}
+        old = {"Name": "/app-ntfy-old-1792392342",
+               "State": {"Status": "exited", "Paused": False},
+               "Config": {"Labels": dict(base)}}
+        fleet = {"app-ntfy": current,
+                 "app-ntfy-old-1792392342": old}
+        self.assertEqual(privacy.current_enrolled(fleet), {"app-ntfy"})
+
+    def test_archive_must_be_stopped_with_matching_live_successor(self):
+        base = {
+            "freshdock.enable": "true",
+            "com.docker.compose.project": "ntfy",
+            "com.docker.compose.service": "application",
+        }
+        old = {"State": {"Status": "running", "Paused": False},
+               "Config": {"Labels": dict(base)}}
+        active = {"State": {"Status": "running"},
+                  "Config": {"Labels": dict(base)}}
+        fleet = {"app-ntfy": active,
+                 "app-ntfy-old-1792392342": old}
+        with self.assertRaisesRegex(privacy.Stop, "not stopped"):
+            privacy.current_enrolled(fleet)
+        old["State"]["Status"] = "exited"
+        active["Config"]["Labels"]["com.docker.compose.service"] = "wrong"
+        with self.assertRaisesRegex(privacy.Stop, "identity mismatch"):
+            privacy.current_enrolled(fleet)
+        active["Config"]["Labels"]["com.docker.compose.service"] = "application"
+        del fleet["app-ntfy"]
+        with self.assertRaisesRegex(privacy.Stop, "no running"):
+            privacy.current_enrolled(fleet)
+
+    def test_legacy_archive_name_is_not_treated_as_normal(self):
+        bad = {"State": {"Status": "exited", "Paused": False},
+               "Config": {"Labels": {"freshdock.enable": "true"}}}
+        with self.assertRaisesRegex(privacy.Stop, "no running"):
+            privacy.current_enrolled({"app-ntfy-old-1792392342": bad})
+
     def test_uses_live_opted_in_fleet_without_hardcoded_names(self):
         policy = privacy.policy()
         own = {

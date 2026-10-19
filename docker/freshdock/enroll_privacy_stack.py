@@ -300,6 +300,16 @@ def verify_after(before):
 
 
 def apply(before, files, tree):
+    # Production 2026-10-19: Freshdock 1.7.1's *normal update* path
+    # recreates a network-mode=container: sidecar with Config.Hostname,
+    # yielding Docker 400 "conflicting options: hostname and the network
+    # mode". Ntfy was stranded under an -old- archive and manually recovered.
+    # Do not enroll VPN clients in a daemon that would strand them similarly.
+    # Remove this gate ONLY when running a verified patched updater and after
+    # a disposable real daemon auto-update regression test succeeds.
+    need(False, "BLOCKED: Freshdock 1.7.1 cannot safely auto-update shared-"
+         "network containers; Ntfy failed Docker 400 on 2026-10-19. "
+         "Patch and canary-test Freshdock before enrolling VPN clients.")
     need(SNAPSHOTS.is_dir(), "Existing private snapshot directory missing")
     snap = SNAPSHOTS / ("privacy-before-" + datetime.now().strftime(
         "%Y%m%d-%H%M%S") + ".json")

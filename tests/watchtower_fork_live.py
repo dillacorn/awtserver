@@ -52,6 +52,12 @@ class TestStack:
         self.mode = mode
         self.temp = tempfile.TemporaryDirectory(prefix=self.id)
         self.config = Path(self.temp.name) / "compose.yml"
+        self.data = {}
+        for service in ("parent", "app1", "app2"):
+            bind = Path(self.temp.name) / service
+            bind.mkdir()
+            (bind / "keep.txt").write_text("persistent-" + service)
+            self.data[service] = bind
         parent_image = MOVING if mode == "parent" else OLD
         child_image = MOVING if mode == "child" else OLD
         self.config.write_text(f"""services:
@@ -60,6 +66,9 @@ class TestStack:
     image: {parent_image}
     command: ["sleep", "3600"]
     restart: "no"
+    environment: ["WT_TEST_ENV=keep-parent"]
+    labels: {{wt-test-protected: "keep-parent"}}
+    volumes: ["{self.data['parent']}:/persist"]
   app1:
     container_name: {self.children[0]}
     image: {child_image}
@@ -67,6 +76,9 @@ class TestStack:
     network_mode: service:parent
     restart: "no"
     depends_on: [parent]
+    environment: ["WT_TEST_ENV=keep-app1"]
+    labels: {{wt-test-protected: "keep-app1"}}
+    volumes: ["{self.data['app1']}:/persist"]
   app2:
     container_name: {self.children[1]}
     image: {child_image}
@@ -74,6 +86,9 @@ class TestStack:
     network_mode: service:parent
     restart: "no"
     depends_on: [parent]
+    environment: ["WT_TEST_ENV=keep-app2"]
+    labels: {{wt-test-protected: "keep-app2"}}
+    volumes: ["{self.data['app2']}:/persist"]
 """)
 
     def compose(self, *args, **kw):
@@ -97,6 +112,42 @@ class TestStack:
             require(child["Config"]["Image"] in (OLD, MOVING),
                     f"{child_name}: image reference changed")
         return parent
+
+    def protected_snapshot(self):
+        result = {}
+        for name in (self.parent, *self.children):
+            c = inspect(name)
+            result[name] = {
+                "environment": sorted(c["Config"]["Env"]),
+                "labels": c["Config"]["Labels"],
+                "mounts": sorted((m["Source"], m["Destination"], m["RW"])
+                                 for m in c["Mounts"]),
+                "binds": c["HostConfig"]["Binds"],
+                "restart": c["HostConfig"]["RestartPolicy"],
+                "cap_add": c["HostConfig"]["CapAdd"],
+                "privileged": c["HostConfig"]["Privileged"],
+            }
+        return result
+
+    def assert_preserved(self, snapshot):
+        for name, expected in snapshot.items():
+            c = inspect(name)
+            require(c is not None, f"{name}: missing after update")
+            current = {
+                "environment": sorted(c["Config"]["Env"]),
+                "labels": c["Config"]["Labels"],
+                "mounts": sorted((m["Source"], m["Destination"], m["RW"])
+                                 for m in c["Mounts"]),
+                "binds": c["HostConfig"]["Binds"],
+                "restart": c["HostConfig"]["RestartPolicy"],
+                "cap_add": c["HostConfig"]["CapAdd"],
+                "privileged": c["HostConfig"]["Privileged"],
+            }
+            require(current == expected, f"{name}: configuration or mounts changed: "
+                    + ", ".join(k for k in expected if current[k] != expected[k]))
+        for service, bind in self.data.items():
+            require((bind / "keep.txt").read_text() == "persistent-" + service,
+                    f"{service}: persistent bind-mount data was altered")
 
     def watchtower(self, *names):
         target = [
@@ -135,8 +186,10 @@ def test_child(latest):
         old_parent = inspect(stack.parent)["Id"]
         old_child = inspect(stack.children[0])["Id"]
         other_child = inspect(stack.children[1])["Id"]
+        protected = stack.protected_snapshot()
         stack.watchtower("child")
         stack.assert_running()
+        stack.assert_preserved(protected)
         require(inspect(stack.parent)["Id"] == old_parent,
                 "Updating child unexpectedly recreated network parent")
         require(inspect(stack.children[0])["Id"] != old_child and
@@ -154,10 +207,22 @@ def test_parent(latest):
     with TestStack("parent") as stack:
         before = {n: inspect(n)["Id"] for n in
                   [stack.parent, *stack.children]}
+        protected = stack.protected_snapshot()
         # All network dependents must be part of the watched scope.
         # v1.23.1 left them stale when only the parent was selected.
-        stack.watchtower("parent", "child", "child2")
+        output = stack.watchtower("parent", "child", "child2")
         stack.assert_running()
+        stack.assert_preserved(protected)
+        parent_stop = output.find('msg="Stopping container" container=' + stack.parent)
+        parent_start = output.find('msg="Started new container" container=' + stack.parent)
+        linked_stops = [output.find('msg="Stopping linked container" container=' + n)
+                        for n in stack.children]
+        linked_starts = [output.find('msg="Started linked container" container=' + n)
+                         for n in stack.children]
+        require(parent_stop >= 0 and parent_start > parent_stop and
+                all(0 <= n < parent_stop for n in linked_stops) and
+                all(n > parent_start for n in linked_starts),
+                "Dependent stop/start order was not safe")
         require(inspect(stack.parent)["Image"] == latest and
                 inspect(stack.parent)["Id"] != before[stack.parent],
                 "Parent was not updated")
@@ -174,6 +239,7 @@ def test_automatic_scheduler(latest):
     with TestStack("child") as stack:
         prior = {n: inspect(n)["Id"] for n in stack.children}
         original_parent = inspect(stack.parent)["Id"]
+        protected = stack.protected_snapshot()
         updater = stack.id + "-scheduler"
         docker("run", "-d", "--rm", "--name", updater,
                "-v", "/var/run/docker.sock:/var/run/docker.sock",
@@ -196,6 +262,7 @@ def test_automatic_scheduler(latest):
                                    "update both network-sharing clients")
             require(inspect(stack.parent)["Id"] == original_parent,
                     "Scheduler changed untargeted network parent")
+            stack.assert_preserved(protected)
             print("PASS: automatic polling updated both network-sharing clients",
                   flush=True)
         finally:

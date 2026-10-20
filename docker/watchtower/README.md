@@ -115,7 +115,10 @@ CI: `.github/workflows/watchtower-fork-tests.yml`
   all verified running and attached to the updated parent
 - Real always-running Watchtower daemon with short polling interval
   automatically updates two selected network-sharing applications, preserves
-  their parent and exits cleanly on disposal
+  their parent and exits cleanly on disposal. **PASS**:
+  [GitHub Actions run 39410790762](https://github.com/dillacorn/omv-remote-dots/actions/runs/39410790762);
+  run logs: scanned=2, updated=2, failed=0. The same run verified direct
+  child updates and parent/two-child reattachment again (all green).
 
 If any live test fails, this migration is **BLOCKED**. It is not permission
 to deploy the same untested behavior to the live OMV host.

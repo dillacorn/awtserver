@@ -29,8 +29,9 @@ def fixture():
                 {"source": "UUID=aa", "target": "/srv/storage",
                  "fstype": "ext4", "other_options_redacted": 0},
             ],
-            "mounts": {"filesystems": [{"target": "/srv/merge", "fstype": "fuse.mergerfs",
-                                       "source": "/srv/secret-branch"}]},
+            "mounts": {"filesystems": [{"target": "/", "fstype": "ext4",
+                "children": [{"target": "/srv/merge", "fstype": "fuse.mergerfs",
+                              "source": "/srv/secret-branch"}]}]},
             "snapraid": {
                 "directives": [{"directive": "parity", "values": ["/srv/parity/parity"]},
                                {"directive": "exclude", "values": ["secret*.env"]}],
@@ -92,6 +93,7 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("pihole | running | pihole/pihole", result)
         self.assertIn("Missing Compose provenance: legacy", result)
         self.assertIn("Samba shares", result)
+        self.assertIn("  /srv/merge (sources recorded privately)", result)
         self.assertIn("No sync is in progress", result)
         for secret in ("203.0.113.10", "100.64.15.16",
                        "/srv/secret-branch", "secret*.env", "neverprint",

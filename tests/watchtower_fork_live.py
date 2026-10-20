@@ -370,6 +370,48 @@ def test_registry_failure():
         docker("image", "rm", fake, check=False)
 
 
+def test_missing_bind_during_recreate():
+    """Observe actual recovery behavior after a disposable bind mount vanishes."""
+    print("===== recreate failure after source bind mount disappears =====",
+          flush=True)
+    docker("tag", OLD, MOVING)
+    with tempfile.TemporaryDirectory(prefix="wtci-recreate-fail-") as tmp:
+        required = Path(tmp) / "config.txt"
+        required.write_text("required")
+        name = "wtci" + uuid.uuid4().hex[:9] + "-recreate-fail"
+        docker("run", "-d", "--name", name, "--restart", "no",
+               "--mount", f"type=bind,source={required},target=/required/config.txt,readonly",
+               MOVING, "sleep", "3600")
+        try:
+            original = inspect(name)
+            require(original and original["State"]["Running"],
+                    "Disposable original was not running")
+            required.unlink()  # Only deletes the disposable test file.
+            p = docker("run", "--rm", "--name", name + "-watchtower",
+                       "-v", "/var/run/docker.sock:/var/run/docker.sock",
+                       WATCHTOWER, "--run-once", "--no-startup-message",
+                       "--stop-timeout", "3s", name,
+                       check=False, timeout=150)
+            current = inspect(name)
+            log = p.stdout[-5000:]
+            print("===== expected recreate-failure report =====", flush=True)
+            print(log, flush=True)
+            failure_recorded = ('failed=1' in log or 'level=error' in log or
+                                'failed to create' in log.lower() or
+                                'failed to start' in log.lower())
+            require(failure_recorded,
+                    "Failed recreation was not detected in updater logs")
+            if current is None or not current["State"]["Running"]:
+                print("CONFIRMED: updater does NOT automatically roll back "
+                      "a recreation failure; original service was removed",
+                      flush=True)
+            else:
+                print("PASS: updater retained/recovered a running service",
+                      flush=True)
+        finally:
+            docker("rm", "-f", name, check=False)
+
+
 def main():
     require(os.environ.get("GITHUB_ACTIONS") == "true",
             "Only run in isolated GitHub Actions environment")
@@ -388,6 +430,7 @@ def main():
         test_airgap_parent(latest)
         test_automatic_scheduler(latest)
         test_registry_failure()
+        test_missing_bind_during_recreate()
     finally:
         # Revert tag only on the disposable CI runner.
         docker("pull", MOVING, timeout=300, check=False)

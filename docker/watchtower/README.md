@@ -1,202 +1,114 @@
-# Maintained Watchtower fork: Freshdock replacement for OMV
+# OMV maintained Watchtower fork
 
-Target: [nicholas-fedor/watchtower](https://github.com/nicholas-fedor/watchtower)
-v**1.23.1** (`nickfedor/watchtower:1.23.1`, 2026-10-13).
-See [Watchtower documentation](https://watchtower.nickfedor.com/v1.23.0/).
+Active updater: [Nicholas Fedor's Watchtower](https://github.com/nicholas-fedor/watchtower),
+pinned to `nickfedor/watchtower:1.23.1`.
 
-## Incident / decision
+## Production state (October 20, 2026)
 
-The running, unpatched `ghcr.io/turbootzz/freshdock:1.7.1` caused
-Docker HTTP 400 `conflicting options: hostname and the network mode`
-on shared-network clients, stopping and archiving Ntfy on October 19 and
-Ntfy, Jellyfin and FreshRSS on October 20. The three original applications
-were restored and verified running behind their original Tailscale parents.
-Freshdock has been **stopped with Docker restart=no**.
+The user verified an installation on host `openmediavault` using the
+reviewed GitHub commit `ba59c8eb29fddffb6abf7376c4c584f512d6abe3`.
+The recorded output confirms:
 
-A tested source patch for Freshdock exists separately in draft PR #17; that
-patch is **not deployed** and is not needed for the fork migration.
+- The new Watchtower container is running with an **exact 24-container**
+  positional allowlist and `0 45 2 * * *` cron, using
+  `TZ=America/New_York` (02:45 local).
+- Existing application containers were **not recreated** during installation.
+- `gluetun`, `transmission`, and `mullvad-browser` are included;
+  Vaultwarden's unsupported legacy Compose stack is excluded.
+- The old updater was stopped with Docker restart disabled.
+- A TLS SMTP setup message was accepted by the server.
+- A 05:00 local root systemd verification timer was enabled.
+- The first post-install 24-container verification succeeded.
 
-## Scope and protection
+The **first real unattended update**, actual SMTP inbox receipt, a
+Shoutrrr delivery, and authenticated VPN recovery after a future Gluetun
+update are **not yet verified** by this installation output.
 
-`replace_freshdock.py` has read-only default; apply is explicit.
-It validates the real OMV host, Docker and Compose, and the currently
-**stopped** Freshdock daemon. It requires exactly 21 currently running
-Freshdock nightly opt-ins and the three additional intended VPN stack
-containers, for a strict **24-container** Watchtower *positional allowlist*.
+## Repository and host cleanup
 
-The host preflight requires real Docker Compose project/service labels,
-existing Compose configuration-file paths and working directories for **all
-24 targets**. Missing original Compose sources block migration rather than
-allowing an updater to remove a container without a reliable recovery source.
+The superseded `docker/freshdock/` source tree, Freshdock-only tests and
+workflows were removed from this repository. Historical changes remain in Git.
 
-Unlike Freshdock, Watchtower can target these names without changing
-application labels, image IDs, bind mounts or Compose configurations.
-Therefore **no existing application is recreated during updater installation**.
+**Do not remove the old host directory before switching the verifier.**
+The initially installed `/docker/watchtower-fork/replace_freshdock.py`
+5 AM verifier still reads `/docker/freshdock/freshdock.toml` for failure
+alerts. Deleting that directory first would silently break future warnings.
 
-The new updater includes **Gluetun, Transmission and Mullvad Browser**, not a
-permanent exclusion. Before permitting them it checks the Gluetun health
-status, both applications' `HostConfig.NetworkMode` against the *current*
-Gluetun ID, and rejects additional unknown Gluetun namespace users. The
-automatic future Gluetun update/kill-switch still requires real validation;
-matching a network namespace is not a VPN egress test.
+Two separately reviewed tools replace that dependency:
 
-**Existing Vaultwarden and nginx-vaultwarden are intentionally excluded**
-because their legacy Compose source was not established. They must not be
-silently enrolled. No other containers are selected by default.
+- `watchtower_verify.py`: independent, read-only verifier of exactly
+  24 known services, Docker health, source Compose files, namespace
+  dependencies, the Gluetun firewall constraints and the updater schedule.
+  It sends a TLS alert on failure using only the root-private
+  `/docker/watchtower-fork/alert_smtp.json`. It never changes containers.
+- `retire_freshdock.py`: default **read-only** guarded retirement.
+  `--apply` copies *only* required SMTP settings to the new 0600 file,
+  tests real TLS SMTP, atomically changes the existing 05:00 verifier
+  service to call the independent script, checks its systemd execution,
+  and only then removes the stopped **Freshdock container**, old
+  `/docker/freshdock` directory, and obsolete installer copy.
+  It attempts removal of the unused old Docker image **without force**.
+  It never runs `docker compose down`, recreates apps, deletes Docker
+  volumes, or prunes unrelated images.
 
-## Verified constraint: no partial network groups
+Retirement fails closed if the current host, old stopped container, timer,
+network dependencies, Compose source paths or mounts differ from expectations.
+If systemd or the TLS handoff fails **before deletion**, the old service
+configuration is restored and the new files are removed. It will not
+automatically repair an interrupted removal after the irreversible step:
+the operator must inspect the actual state, not rerun blindly.
 
-The first real Docker CI run (2026-10-20) confirmed a direct update of a
-network-sharing application **passes**, but updating *only the parent*
-without selecting its two running dependents left those dependents
-attached to the old container ID. The runner correctly FAILED.
+**Deployment is separate from GitHub.** Obtain both Python files from the
+same reviewed, pinned commit. Verify their Git blob hashes, place them in
+a private temporary directory on OMV, then run the helper first without
+`--apply`, inspect PASS, and run `--apply`. The final exact commands are
+supplied after CI validation. No host-side removal is done by GitHub Actions.
 
-The guarded migration now verifies that **every network-sharing
-dependent (including stopped containers) of every targeted parent is on
-the same exact target list**, and rejects explicit/Compose dependency labels
-that hide the true network parent.
-It refuses partial network groups. [The successful follow-up Docker canary
-(run 39410256380)](https://github.com/dillacorn/omv-remote-dots/actions/runs/39410256380)
-updated the parent and reattached BOTH selected dependents, verified running
-on the new parent's namespace. Its direct-child update also passed.
-Watchtower dependency ordering is not a guarantee of repairing dependents
-that are omitted from the watched scope.
+Some **legacy Freshdock labels and `compose.freshdock.yml` overlays may
+remain attached to current application containers**. Removing those files
+while Docker Compose's original configuration references them could break
+future application recovery. Watchtower itself ignores the old Freshdock
+labels. Removing or rewriting those application overlays is a separate
+Compose migration, not part of the stopped-updater deletion.
 
-## SMTP and scheduling
+## Why Watchtower replaced Freshdock
 
-Schedule: `0 45 2 * * *` (six-field seconds/minutes/hours Watchtower cron)
-with `TZ=America/New_York`. This matches 02:45 local time and retains the
-existing private SMTP destination and credentials.
+The unpatched Freshdock v1.7.1 stranded applications during the October 19–20
+unattended updates with Docker HTTP 400 conflicting hostname/network-mode
+errors. Watchtower v1.23.1 was subsequently tested on disposable GitHub-hosted
+Docker networks, with both direct shared-namespace child updates and
+parent-plus-two-dependent updates. [PR #18 CI](https://github.com/dillacorn/omv-remote-dots/pull/18)
+includes real Gluetun v3.40.4 -> v3.41.3 fail-closed VPN tests with an invalid
+WireGuard endpoint and active startup egress probes.
 
-The original `/docker/freshdock/freshdock.toml` is parsed privately and
-converted to a Shoutrrr SMTP URL with explicit `ExplicitTLS`/STARTTLS
-(port 587) or `ImplicitTLS` (465). STARTTLS on 587 is explicitly required (fail closed if the SMTP server
-does not advertise STARTTLS); 465 uses implicit TLS from the outset.
-The URL is stored at
-`/docker/watchtower-fork/notification_url` mode 0600; Watchtower reads
-it from `/run/secrets/notification_url`. Docker inspect and Compose
-environment reveal **only the secret file path**, never the password.
+Important caveat: Watchtower's linked restart path **does not wait for VPN
+health**, and its Docker create/start failure path **does not guarantee
+rollback**. A disposable missing-bind-mount test confirmed that a failed
+recreate can remove the original application container. The independent
+05:00 verification timer adds failure **detection**, not automatic restoration.
 
-Watchtower does not provide Freshdock's equivalent preflight
-health-gated rollback guarantee. The v1.23.1 batch update implementation
-stops dependents, replaces the parent, and starts dependents in graph order,
-but **does not wait for the new parent's Docker health status** before starting
-its children. Its health-waiting rolling restart feature explicitly does not
-support linked containers. Thus namespace reattachment alone **does not
-prove the VPN kill switch is engaged before Transmission/Mullvad Browser starts**.
-A dedicated isolated CI run now exercises **actual Gluetun** (not just an
-Alpine network parent), updating a real Gluetun image from v3.40.4 to
-v3.41.3 while both dependent containers share its namespace. It uses an
-unreachable fake WireGuard endpoint and generated test-only keys.
-Both dependents stayed unable to connect to a public TCP destination before
-and after the parent update. The test runner's ordinary network path was
-confirmed reachable as a positive control. This is evidence for **fail-closed
-behavior when the VPN is down**; it cannot guarantee there is no millisecond
-startup race, nor establish behavior while a real tunnel is connected.
-See the `live-gluetun` job in PR #18 Actions.
+The guarded 24-container allowlist ensures network parent and dependent
+containers are both selected. It rejects unknown namespace children and
+labels that hide the true parent. Real production authenticated VPN
+reconnection and the first 02:45 cycle still need observation.
 
-A disposable CI failure-injection test removed a required **test-only bind
-mount source** immediately before an update. The fork reported
-`failed=1, updated=0` but the original container was already removed.
-**Automatic rollback does not occur.** Old image retention alone does not
-restore the removed container, and recovery requires original Compose/source
-identity and bind mounts. A normal registry lookup failure was independently
-tested and did preserve the original running container.
+## Artifacts and tests
 
-To avoid silent unattended failures, the guarded installer now also stages
-a separate root-run **05:00 America/New_York systemd verification timer**
-(`watchtower-fork-verify.timer`). The verifier checks the 24 saved names,
-Freshdock exclusion, Watchtower schedule and allowlist, service state,
-Docker health statuses and current shared-network parent IDs. On error it
-sends an SMTP alert using the original private Freshdock TOML via verified TLS.
-It never restarts or recreates applications. The installer sends a real
-encrypted setup email before starting Watchtower. SMTP delivery failures
-block installation, and inability to enable the verifier timer stops the
-new updater. A verifier alert is **detection, not rollback**; the original
-Compose files and volumes must remain available for authorized recovery.
+- `compose.yml` is **documentation only**, with an intentionally invalid
+  positional target. The live private Compose file remains on the host at
+  `/docker/watchtower-fork/compose.yml`.
+- `replace_freshdock.py` documents the *already-completed initial migration*.
+  It is not a post-retirement update command; its legacy verifier needs
+  replacing before deleting the old files.
+- `watchtower_verify.py` and `retire_freshdock.py` are the maintained
+  standalone retirement/monitoring implementations.
+- `tests/test_watchtower_verifier.py` covers independent monitoring,
+  fail-closed VPN guards, SMTP TLS/0600 secrets, successful retirement
+  without touching other containers, and restoration on systemd failure.
+- `tests/watchtower_fork_live.py` and
+  `tests/watchtower_fork_gluetun_live.py` run isolated real Docker tests.
+- `.github/workflows/watchtower-fork-tests.yml` runs syntax, unit tests,
+  Compose validation, and both disposable Docker suites.
 
-Watchtower itself reads its Shoutrrr SMTP URL from the private file, not
-from environment credentials. The disposable Docker notification test
-verified the file-reading path, not production SMTP delivery.
-
-**Production deployment remains contingent on real OMV inventory and
-a controlled SMTP/health preflight.** The isolated real Gluetun test proves
-fail-closed behavior only for a disconnected fake VPN; do not confuse that
-with successful authenticated tunnel recovery or fully automatic rollback.
-Keep all three VPN containers in the 24-target allowlist. If actual OMV
-Compose/network settings differ from the tested model, or firewall
-preflight rejects any broad exception, stop instead of relaxing the test.
-An alternative to evaluate if the fork cannot provide this guarantee is a
-health-gated coordinated Compose update for the complete VPN group, or a
-tested change to Watchtower's dependency-restart lifecycle. Either approach
-requires inspecting actual OMV Compose identities and should be validated
-on disposable stacks first, not improvised against production.
-
-## Guarded host migration
-
-No OMV commands are executed by GitHub Actions, and committing/merging
-this repository does not deploy anything. After a successful CI test and
-review, use a *pinned SHA* from this PR, never an unreviewed floating URL.
-
-1. Copy the exact `docker/watchtower/replace_freshdock.py` from the
-   reviewed commit to a private temporary location on OMV.
-2. Run `python3 /path/to/replace_freshdock.py` for a read-only check.
-3. Only after it reports an exact list of 24 targets and current healthy VPN
-   namespaces, run `python3 /path/to/replace_freshdock.py --apply`.
-4. The installer stages protected configuration under
-   `/docker/watchtower-fork` and creates exactly two new systemd unit
-   files at `/etc/systemd/system/watchtower-fork-verify.{service,timer}`.
-   No existing units may be overwritten. It validates calendar syntax,
-   sends an encrypted SMTP **setup test email** using the original private
-   Freshdock credentials, pulls Watchtower v1.23.1, starts only the updater,
-   and verifies all original container IDs and states are unchanged.
-   It enables the 05:00 failure-alert timer after verifying the updater.
-   On a failed new updater installation it disables/stops that updater
-   and disables the new timer; Freshdock remains stopped. Newly staged
-   files are retained for inspection, rather than silently deleted.
-5. After installation, run
-   `python3 /docker/watchtower-fork/replace_freshdock.py --verify`
-   to inspect current 24-target state without sending mail.
-   Review both the real setup email and Watchtower Shoutrrr delivery.
-   Confirm the first 02:45 scheduled update and 05:00 verifier run
-   before calling the migration complete. The verified setup email uses
-   Python's TLS SMTP path; it is not itself proof the separate Shoutrrr
-   notifier delivered a notification.
-
-The public `compose.yml` in this directory is **documentation only** and
-contains a deliberately unmatchable sentinel positional target. Do not
-run it directly. Only the private generated file has actual target names.
-
-**Do not start Freshdock again.** Do not run both updater daemons together.
-Do not delete Freshdock's private files, original volumes, old images or any
-app container. Do not run this migration while SnapRAID is actively running.
-
-The source helper `docker/restart_defined_compose.sh` is adjusted in this
-branch to target the new directory, not the retired daemon. Existing
-copies on the server do not change until separately updated.
-
-## Testing requirement
-
-CI: `.github/workflows/watchtower-fork-tests.yml`
-
-- Python migration unit tests and syntax
-- Docker Compose syntax validation
-- Real `nickfedor/watchtower:1.23.1` Docker canary: direct update of
-  `network_mode: service:parent` app, with untouched parent/sibling
-- Real parent update with two network-sharing dependent applications,
-  all verified running and attached to the updated parent
-- Real Gluetun v3.40.4 -> v3.41.3 update through an invalid test WireGuard
-  tunnel, with both dependents verified isolated from a reachable public
-  destination and reattached to the replacement parent
-- Disposable mount-source disappearance test confirming fork logs failed
-  recreation but does not perform automatic application rollback
-- Offline unit checks for 05:00 verifier behavior and encrypted failure mail
-- Real always-running Watchtower daemon with short polling interval
-  automatically updates two selected network-sharing applications, preserves
-  their parent and exits cleanly on disposal. **PASS**:
-  [GitHub Actions run 39410790762](https://github.com/dillacorn/omv-remote-dots/actions/runs/39410790762);
-  run logs: scanned=2, updated=2, failed=0. The same run verified direct
-  child updates and parent/two-child reattachment again (all green).
-
-If any live test fails, this migration is **BLOCKED**. It is not permission
-to deploy the same untested behavior to the live OMV host.
+Neither SnapRAID nor unrelated applications are modified by this repository
+cleanup. No GitHub Release is required for these repository changes.

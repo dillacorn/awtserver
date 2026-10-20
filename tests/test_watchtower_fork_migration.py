@@ -232,14 +232,14 @@ class MigrationTests(unittest.TestCase):
             "tls": "starttls",
         }
         with patch.object(migration.smtplib, "SMTP") as ctor:
-            client = ctor.return_value.__enter__.return_value
+            client = ctor.return_value
             client.has_extn.return_value = False
             with self.assertRaises(migration.Stop):
                 migration.smtp_send(cfg, "test", "body")
             client.login.assert_not_called()
             client.send_message.assert_not_called()
         with patch.object(migration.smtplib, "SMTP") as ctor:
-            client = ctor.return_value.__enter__.return_value
+            client = ctor.return_value
             client.has_extn.return_value = True
             migration.smtp_send(cfg, "test", "body")
             client.starttls.assert_called_once()

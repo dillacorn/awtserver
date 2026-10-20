@@ -114,10 +114,10 @@ def selection(fleet):
     for n in ("transmission", "mullvad-browser"):
         need(fleet[n]["HostConfig"]["NetworkMode"] == "container:" + parent["Id"],
              f"{n} does not share the CURRENT Gluetun network namespace")
-    # All external dependents of Gluetun must be controlled by Watchtower,
-    # otherwise replacing the VPN parent can strand an unselected dependent.
+    # A stopped dependent may be started later, still referencing the old
+    # parent ID after replacement. Block unknown clients regardless of state.
     for n, c in fleet.items():
-        if state(c) == "running" and c["HostConfig"]["NetworkMode"] == "container:" + parent["Id"]:
+        if c["HostConfig"]["NetworkMode"] == "container:" + parent["Id"]:
             need(n in ("transmission", "mullvad-browser"),
                  f"Unreviewed additional Gluetun network client: {n}")
     targets = tuple(sorted(set(enabled) | set(VPN)))
@@ -136,13 +136,28 @@ def selection(fleet):
     for name in targets:
         parent = fleet[name]
         for child_name, child in fleet.items():
-            if state(child) != "running":
-                continue
             if child["HostConfig"].get("NetworkMode") != "container:" + parent["Id"]:
                 continue
             need(child_name in watched,
                  f"Unsafe partial network group: {name} selected but "
-                 f"dependent {child_name} excluded")
+                 f"dependent {child_name} excluded (state={state(child)})")
+            # In v1.23.1, an explicit Watchtower dependency label or
+            # Compose depends_on label OVERRIDES HostConfig.NetworkMode
+            # dependency detection. Require a reference to the actual
+            # parent, or the fork may restart the child in the wrong order.
+            explicit = label(child, "com.centurylinklabs.watchtower.depends-on")
+            compose_dep = label(child, "com.docker.compose.depends_on")
+            if explicit:
+                refs = {x.strip().lstrip("/") for x in explicit.split(",")}
+                need(name in refs,
+                     f"{child_name}: Watchtower depends-on omits network parent {name}")
+            elif compose_dep:
+                refs = {x.split(":", 1)[0].strip()
+                        for x in compose_dep.split(",")}
+                need(label(parent, "com.docker.compose.project") ==
+                     label(child, "com.docker.compose.project") and
+                     label(parent, "com.docker.compose.service") in refs,
+                     f"{child_name}: Compose depends_on omits network parent {name}")
     return targets
 
 
@@ -180,6 +195,9 @@ def smtp_url(cfg):
         "toaddresses": ",".join(cfg["to"]),
         "encryption": mode,
         "usestarttls": start,
+        # Shoutrrr otherwise permits a plaintext fallback when STARTTLS is
+        # unavailable. Never downgrade the private SMTP credentials.
+        "requirestarttls": start,
         "timeout": "30s",
     })
     return (

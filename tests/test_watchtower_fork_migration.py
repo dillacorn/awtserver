@@ -192,6 +192,60 @@ class MigrationTests(unittest.TestCase):
         self.assertNotIn("freshdock", obj["services"])
         self.assertNotIn("password", json.dumps(obj).lower())
 
+    def test_post_update_verifier_detects_outage(self):
+        fleet = self.fleet()
+        names = list(migration.selection(fleet))
+        updater = make_container(
+            "watchtower", labels=compose_labels())
+        updater["Config"]["Cmd"] = [
+            "--schedule", migration.SCHEDULE, "--no-startup-message", *names]
+        fleet["watchtower"] = updater
+        old = make_container("freshdock", running=False)
+        old["HostConfig"]["RestartPolicy"]["Name"] = "no"
+        fleet["freshdock"] = old
+        self.assertEqual(migration.verify_runtime(
+            fleet, {"container_names": names}), names)
+        fleet["app00"]["State"]["Status"] = "exited"
+        with self.assertRaises(migration.Stop):
+            migration.verify_runtime(fleet, {"container_names": names})
+        fleet["app00"]["State"]["Status"] = "running"
+        fleet["gluetun"]["State"]["Health"]["Status"] = "unhealthy"
+        with self.assertRaisesRegex(migration.Stop, "Gluetun"):
+            migration.verify_runtime(fleet, {"container_names": names})
+        fleet["gluetun"]["State"]["Health"]["Status"] = "healthy"
+        fleet["watchtower"]["Config"]["Cmd"][1] = "0 55 2 * * *"
+        with self.assertRaisesRegex(migration.Stop, "schedule"):
+            migration.verify_runtime(fleet, {"container_names": names})
+
+    def test_verifier_timer_and_notification_security(self):
+        service, timer = migration.verifier_units()
+        self.assertIn("--verify --notify-on-failure", service)
+        self.assertIn("OnCalendar=*-*-* 05:00:00 America/New_York", timer)
+        self.assertIn("Persistent=true", timer)
+        self.assertNotIn("password", service.lower() + timer.lower())
+
+    def test_smtp_alert_requires_real_tls(self):
+        cfg = {
+            "host": "smtp.example.org", "port": 587,
+            "username": "alice", "password": "private-credential",
+            "from": "alice@example.org", "to": ["bob@example.org"],
+            "tls": "starttls",
+        }
+        with patch.object(migration.smtplib, "SMTP") as ctor:
+            client = ctor.return_value.__enter__.return_value
+            client.has_extn.return_value = False
+            with self.assertRaises(migration.Stop):
+                migration.smtp_send(cfg, "test", "body")
+            client.login.assert_not_called()
+            client.send_message.assert_not_called()
+        with patch.object(migration.smtplib, "SMTP") as ctor:
+            client = ctor.return_value.__enter__.return_value
+            client.has_extn.return_value = True
+            migration.smtp_send(cfg, "test", "body")
+            client.starttls.assert_called_once()
+            client.login.assert_called_once_with("alice", "private-credential")
+            client.send_message.assert_called_once()
+
     def test_read_only_default_does_not_call_apply(self):
         with patch.object(migration, "preflight",
                           return_value=({}, tuple(

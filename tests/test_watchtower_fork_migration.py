@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -284,6 +285,90 @@ class MigrationTests(unittest.TestCase):
             client.starttls.assert_called_once()
             client.login.assert_called_once_with("alice", "private-credential")
             client.send_message.assert_called_once()
+
+    def test_install_stages_private_files_and_never_recreates_apps(self):
+        fleet = self.fleet()
+        targets = migration.selection(fleet)
+        mail = {
+            "host": "smtp.example.org", "port": 587, "tls": "starttls",
+            "username": "alice", "password": "private-not-in-compose",
+            "from": "alice@example.org", "to": ["bob@example.org"],
+        }
+        updater = make_container("watchtower")
+        updater["Config"]["Image"] = migration.VERSION
+        updater["Config"]["Cmd"] = [
+            "--schedule", migration.SCHEDULE, "--no-startup-message", *targets]
+        with tempfile.TemporaryDirectory(prefix="wtci-install-") as tmp:
+            root = Path(tmp) / "watchtower-fork"
+            units = Path(tmp) / "systemd"
+            units.mkdir()
+            with patch.object(migration, "ROOT", root), \
+                 patch.object(migration, "UNITS", units), \
+                 patch.object(migration, "containers",
+                              side_effect=[fleet, fleet | {"watchtower": updater}]), \
+                 patch.object(migration, "docker") as docker, \
+                 patch.object(migration, "command",
+                              return_value=SimpleNamespace(returncode=0)) as command, \
+                 patch.object(migration, "smtp_send") as mail_send:
+                migration.apply(fleet, targets, mail)
+                self.assertTrue(mail_send.called)
+                self.assertEqual((root / "notification_url").stat().st_mode & 0o777,
+                                 0o600)
+                self.assertEqual(root.stat().st_mode & 0o777, 0o700)
+                self.assertEqual((root / "replace_freshdock.py").stat().st_mode & 0o777,
+                                 0o700)
+                self.assertTrue((units / migration.VERIFY_SERVICE).exists())
+                self.assertTrue((units / migration.VERIFY_TIMER).exists())
+                self.assertEqual(
+                    json.loads((root / "targets.json").read_text())["container_names"],
+                    list(targets))
+                self.assertNotIn(mail["password"],
+                                 (root / "compose.yml").read_text())
+                docker.assert_called_once_with("pull", migration.VERSION,
+                                               timeout=300)
+                self.assertTrue(any(c.args[:3] ==
+                                    ("systemctl", "enable", "--now")
+                                    for c in command.call_args_list))
+                self.assertTrue(any("up" in c.args for c in
+                                    command.call_args_list))
+                self.assertFalse(any("down" in c.args for c in
+                                     command.call_args_list))
+
+    def test_installer_disables_updater_if_postcheck_timer_fails(self):
+        fleet = self.fleet()
+        targets = migration.selection(fleet)
+        mail = {
+            "host": "smtp.example.org", "port": 587, "tls": "starttls",
+            "username": "alice", "password": "secret",
+            "from": "alice@example.org", "to": ["bob@example.org"],
+        }
+        updater = make_container("watchtower")
+        updater["Config"]["Image"] = migration.VERSION
+        updater["Config"]["Cmd"] = [
+            "--schedule", migration.SCHEDULE, "--no-startup-message", *targets]
+        with tempfile.TemporaryDirectory(prefix="wtci-fail-") as tmp:
+            units = Path(tmp) / "units"
+            units.mkdir()
+            root = Path(tmp) / "private"
+            def command(*args, **kwargs):
+                if args[:3] == ("systemctl", "enable", "--now"):
+                    raise migration.Stop("Timer failed to enable")
+                return SimpleNamespace(returncode=0)
+            with patch.object(migration, "ROOT", root), \
+                 patch.object(migration, "UNITS", units), \
+                 patch.object(migration, "containers",
+                              side_effect=[fleet, fleet | {"watchtower": updater}]), \
+                 patch.object(migration, "docker") as docker, \
+                 patch.object(migration, "command",
+                              side_effect=command) as cmd, \
+                 patch.object(migration, "smtp_send"):
+                with self.assertRaisesRegex(migration.Stop, "Timer failed"):
+                    migration.apply(fleet, targets, mail)
+                self.assertIn("update", [c.args[0] for c in docker.call_args_list])
+                self.assertIn("stop", [c.args[0] for c in docker.call_args_list])
+                self.assertTrue(any(c.args[:3] ==
+                                    ("systemctl", "disable", "--now")
+                                    for c in cmd.call_args_list))
 
     def test_read_only_default_does_not_call_apply(self):
         with patch.object(migration, "preflight",

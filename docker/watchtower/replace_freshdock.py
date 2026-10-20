@@ -122,9 +122,27 @@ def selection(fleet):
                  f"Unreviewed additional Gluetun network client: {n}")
     targets = tuple(sorted(set(enabled) | set(VPN)))
     need(len(targets) == TOTAL_COUNT, "Allowlist must contain exactly 24 targets")
+    watched = set(targets)
     for n in targets:
         need(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", n) is not None,
              f"Unsafe name in target list: {n!r}")
+        need(label(fleet[n], "com.centurylinklabs.watchtower.enable").lower()
+             != "false", f"{n}: explicit legacy Watchtower opt-out")
+        need(label(fleet[n], "com.centurylinklabs.watchtower.monitor-only").lower()
+             != "true", f"{n}: legacy Watchtower monitor-only label")
+    # 1.23.1 live Docker canary reproduced stale network dependents when
+    # only the parent was targeted. The parent and EVERY running dependent
+    # must appear on the same exact Watchtower update allowlist.
+    for name in targets:
+        parent = fleet[name]
+        for child_name, child in fleet.items():
+            if state(child) != "running":
+                continue
+            if child["HostConfig"].get("NetworkMode") != "container:" + parent["Id"]:
+                continue
+            need(child_name in watched,
+                 f"Unsafe partial network group: {name} selected but "
+                 f"dependent {child_name} excluded")
     return targets
 
 

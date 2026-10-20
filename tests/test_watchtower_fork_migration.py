@@ -1,7 +1,10 @@
 """Offline safety checks for Freshdock -> maintained Watchtower installation."""
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -237,6 +240,28 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("OnCalendar=*-*-* 05:00:00 America/New_York", timer)
         self.assertIn("Persistent=true", timer)
         self.assertNotIn("password", service.lower() + timer.lower())
+        if shutil.which("systemd-analyze"):
+            with tempfile.TemporaryDirectory(prefix="wtci-systemd-") as tmp:
+                a = Path(tmp) / migration.VERIFY_SERVICE
+                b = Path(tmp) / migration.VERIFY_TIMER
+                a.write_text(service)
+                b.write_text(timer)
+                result = subprocess.run(
+                    ["systemd-analyze", "verify", str(a), str(b)],
+                    capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_verifier_alerts_on_missing_install(self):
+        with tempfile.TemporaryDirectory(prefix="wtci-missing-") as tmp:
+            with patch.object(migration, "ROOT",
+                              Path(tmp) / "missing"), \
+                 patch.object(migration, "smtp_data",
+                              return_value={"tls": "starttls"}), \
+                 patch.object(migration, "smtp_send") as send:
+                with self.assertRaisesRegex(migration.Stop, "verification failed"):
+                    migration.verify_and_alert(notify=True)
+                send.assert_called_once()
+                self.assertIn("Watchtower", send.call_args.args[1])
 
     def test_smtp_alert_requires_real_tls(self):
         cfg = {

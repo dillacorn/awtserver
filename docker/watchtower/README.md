@@ -39,6 +39,20 @@ matching a network namespace is not a VPN egress test.
 because their legacy Compose source was not established. They must not be
 silently enrolled. No other containers are selected by default.
 
+## Verified constraint: no partial network groups
+
+The first real Docker CI run (2026-10-20) confirmed a direct update of a
+network-sharing application **passes**, but updating *only the parent*
+without selecting its two running dependents left those dependents
+attached to the old container ID. The runner correctly FAILED.
+
+The guarded migration now verifies that **every running network-sharing
+dependent of every targeted parent is on the same exact target list**.
+It refuses partial network groups; the follow-up canary explicitly targets
+the parent and both dependents together. Do not enable the fork if this
+combined canary still fails. Watchtower dependency ordering is not the
+same as a guarantee of automatic repair for unselected dependents.
+
 ## SMTP and scheduling
 
 Schedule: `0 45 2 * * *` (six-field seconds/minutes/hours Watchtower cron)

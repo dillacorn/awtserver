@@ -14,6 +14,29 @@ support and packages when the actual SSD replacement occurs. No desktop
 environment is required. A web UI is optional and subordinate to plain files
 and systemd, not a second source of truth.
 
+## Confirmed future Debian preferences
+
+User-confirmed October 20, 2026:
+
+- **Required:** SSH/TTY administration; Docker Compose and application data;
+  existing Tailscale topology, Pi-hole DNS, Gluetun isolation, SnapRAID,
+  mergerfs, FTP/ProFTPD and its Fail2ban protection, SMART/email monitoring,
+  APC UPS shutdown safeguards and backup/scheduled-job continuity.
+- **Optional only:** SMB/Samba. The user seldom uses it but wants it
+  available. Preserve the existing share definition, credentials/identity
+  mappings and access policy in private recovery material. Do not enable
+  `smbd` or `wsdd-server` by default on new Debian; provide an opt-in
+  native-service profile later. Do not remove mergerfs or its data.
+- **Omit:** NetBird and Podman, including the Podman restart/auto-update
+  units. The user does not use either and does not plan to.
+- **Remove OMV-only functionality** after new Debian cutover: OMV GUI,
+  engine and related web authentication jail. Do not disable on live OMV.
+- Other enabled services (ClamAV, collectd, Avahi, rsync/backup tasks,
+  ProFTPD's exact exposure, etc.) still require dependency evaluation.
+
+These decisions affect only the **future replacement OS**. The working
+OMV server and all containers remain unchanged.
+
 ## First step: collect CURRENT host evidence
 
 Run the read-only script `inventory.py` on the actual host as root. It requires
@@ -41,7 +64,7 @@ This is an inventory, **not a verified backup**.
 | Fail2ban | Active jails, ban counters, jail/filter/action file names | Install native fail2ban and transfer reviewed jail configs privately |
 | Networking | Interfaces, routes, Tailscale self info, firewall table names, listening ports | Ensure remote SSH, firewall and DNS access before switching |
 | Docker | Exact runtime container names, images, Compose project/service labels, source paths, bind mounts, volumes, ports, namespaces and restart policy | Restore **original Compose projects** and persistent data, preserving shared VPN/Tailscale namespace groups |
-| Shares | Samba share names/paths, NFS exports (client rules omitted) | Restore identities, permissions, access policy and share services |
+| Shares | Samba share names/paths, NFS exports (client rules omitted) | SMB is **optional**, not enabled by default in the future Debian plan; preserve the existing share configuration and permissions for later opt-in |
 | Other services | systemd services/timers, cron schedule metadata, UPS, SMART, mail tools | Recreate host-native services and alerts without OMV plugins |
 | Packages/users | Infrastructure packages, manually installed packages, UID/GID and homes | Preserve service identity and file ownership across reinstall |
 
@@ -90,7 +113,7 @@ Debian. `omv-webgui` is likely obsolete without OMV; `proftp` may be
 obsolete **only after** confirming whether an FTP daemon is still used.
 Do not remove either while OMV is running. Do not equate the 55 Docker records
 with 55 running services or the 75 enabled units with 75 active processes.
-The 1 Samba share's definition, access policy and UID/GID still require audit.
+The 1 Samba share's definition, access policy and UID/GID must be preserved in the private migration archive for optional later use. SMB is not part of the required day-one Debian services.
 
 **Next data handoff:** The JSON was saved privately at
 `/root/debian-migration-inventory/20261020-135204-875455/inventory.json`.
@@ -119,8 +142,7 @@ Docker source paths.
 
 Important new findings:
 
-- One Samba share depends on the mergerfs storage view; the enabled
-  mergerfs mount unit requires direct filesystem-type verification.
+- One currently configured Samba share points to mergerfs, but the user **rarely uses SMB**. Treat it as an optional future service, preserve its configuration in private backup, and do not enable it by default. The mergerfs storage mount remains mandatory for other services.
 - SSH/Fail2ban must be migrated as a coordinated access policy, not simply
   copied from OMV. The *actual* SSH settings remain private.
 - Docker has 55 running Compose-provenance-backed containers and 12 named
@@ -163,8 +185,8 @@ not validate actual host service behavior.
    existing data/parity disks during the **new OS SSD installer** as practical,
    verify target disk serial/capacity and boot path, and preserve old SSD.
    Mount data disks only after reviewing `blkid`, `lsblk`, and `fstab`.
-7. **Acceptance tests:** SSH LAN/Tailscale, DNS/Pi-hole, mergerfs and SnapRAID,
-   fail2ban, firewall, Samba/NFS, UPS/smartd email, all relevant Compose
+7. **Acceptance tests:** SSH LAN/Tailscale, FTP, DNS/Pi-hole, mergerfs and SnapRAID,
+   fail2ban, firewall, optional Samba only if enabled, UPS/smartd email, all relevant Compose
    projects/volumes, Docker updates, systemd timers and backup restore.
    No decommission until these pass.
 

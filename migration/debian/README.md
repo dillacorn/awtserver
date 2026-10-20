@@ -163,6 +163,12 @@ Use its private terminal output to decide which host features to retain.
 The workflow tests audit parsing and sensitive-field suppression; it does
 not validate actual host service behavior.
 
+The future-service split, preservation requirements, acceptance checks
+and opt-in SMB profile are tracked in
+[restore-manifest.md](restore-manifest.md). Scheduled OMV and rsync jobs can
+be classified without exposing their command bodies using
+[jobs_audit.py](jobs_audit.py).
+
 ## Rebuild milestones
 
 1. **Inventory:** Run `inventory.py`; analyze the private report and compare

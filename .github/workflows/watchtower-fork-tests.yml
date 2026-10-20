@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           python3 -m py_compile docker/watchtower/*.py tests/watchtower_fork_*.py
-          python3 -m unittest discover -s tests -p 'test_watchtower_fork*.py' -v
+          python3 -m unittest discover -s tests -p 'test_watchtower*.py' -v
           docker compose -f docker/watchtower/compose.yml config --quiet
           systemd-analyze calendar '*-*-* 05:00:00 America/New_York'
   live-docker:

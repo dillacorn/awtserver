@@ -166,7 +166,7 @@ class TestStack:
             options += ["-v", str(notification_file) + ":/run/secrets/notification_url:ro",
                         "-e", "WATCHTOWER_NOTIFICATION_URL=/run/secrets/notification_url"]
         p = docker("run", *options,
-                   WATCHTOWER, "--run-once", "--no-startup-message",
+                   WATCHTOWER, "--run-once", "--no-startup-message", "--stop-timeout", "3s",
                    *target, timeout=270, check=False)
         print("===== Watchtower v1.23.1 logs =====", flush=True)
         print(p.stdout[-7000:], flush=True)
@@ -226,7 +226,7 @@ def test_parent(latest):
         parent_start = output.find('msg="Started new container" container=' + stack.parent)
         linked_stops = [output.find('msg="Stopping linked container" container=' + n)
                         for n in stack.children]
-        linked_starts = [output.find('msg="Started linked container" container=' + n)
+        linked_starts = [output.find('msg="Started new container" container=' + n)
                          for n in stack.children]
         require(parent_stop >= 0 and parent_start > parent_stop and
                 all(0 <= n < parent_stop for n in linked_stops) and
@@ -254,6 +254,7 @@ def test_automatic_scheduler(latest):
                "-v", "/var/run/docker.sock:/var/run/docker.sock",
                "-e", "TZ=America/New_York",
                WATCHTOWER, "--interval", "5", "--no-startup-message",
+               "--stop-timeout", "3s",
                *stack.children, timeout=90)
         try:
             deadline = time.monotonic() + 160
@@ -296,7 +297,7 @@ def test_registry_failure():
         before = inspect(name)
         p = docker("run", "--rm", "--name", name + "-watchtower",
                    "-v", "/var/run/docker.sock:/var/run/docker.sock",
-                   WATCHTOWER, "--run-once", "--no-startup-message",
+                   WATCHTOWER, "--run-once", "--no-startup-message", "--stop-timeout", "3s",
                    name, check=False, timeout=120)
         current = inspect(name)
         require(current and current["Id"] == before["Id"] and

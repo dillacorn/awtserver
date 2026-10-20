@@ -58,15 +58,16 @@ class TestStack:
             bind.mkdir()
             (bind / "keep.txt").write_text("persistent-" + service)
             self.data[service] = bind
-        parent_image = MOVING if mode == "parent" else OLD
+        parent_image = MOVING if mode in ("parent", "airgap") else OLD
         child_image = MOVING if mode == "child" else OLD
+        parent_network = "    network_mode: none\n" if mode == "airgap" else ""
         self.config.write_text(f"""services:
   parent:
     container_name: {self.parent}
     image: {parent_image}
     command: ["sleep", "3600"]
     restart: "no"
-    environment: ["WT_TEST_ENV=keep-parent"]
+{parent_network}    environment: ["WT_TEST_ENV=keep-parent"]
     labels: {{wt-test-protected: "keep-parent"}}
     volumes: ["{self.data['parent']}:/persist"]
   app1:
@@ -246,6 +247,50 @@ def test_parent(latest):
         print("PASS: parent updated and both dependents reattached", flush=True)
 
 
+def test_parent_only_unselected_clients(latest):
+    print("===== parent-only update: observe unselected dependents =====", flush=True)
+    docker("tag", OLD, MOVING)
+    with TestStack("parent") as stack:
+        before = {name: inspect(name)["Id"] for name in stack.children}
+        stack.watchtower("parent")
+        parent = inspect(stack.parent)
+        require(parent and parent["Image"] == latest, "Parent-only canary did not update")
+        stale = [name for name in stack.children
+                 if inspect(name)["HostConfig"]["NetworkMode"] !=
+                 "container:" + parent["Id"]]
+        if stale:
+            require(all(inspect(name)["Id"] == before[name] for name in stale),
+                    "Unselected dependent unexpectedly changed and is stale")
+            print("CONFIRMED: unselected dependents left on obsolete namespace: "
+                  + ", ".join(stale), flush=True)
+            print("PASS: migration guards reject this unsafe partial selection",
+                  flush=True)
+        else:
+            print("PASS: fork unexpectedly healed all unselected clients",
+                  flush=True)
+
+
+def test_airgap_parent(latest):
+    print("===== no-network parent: no network fallback on recreation =====",
+          flush=True)
+    docker("tag", OLD, MOVING)
+    with TestStack("airgap") as stack:
+        before = stack.protected_snapshot()
+        parent = inspect(stack.parent)
+        require(parent["HostConfig"]["NetworkMode"] == "none",
+                "Initial airgap parent was not network-isolated")
+        stack.watchtower("parent", "child", "child2")
+        parent = stack.assert_running()
+        stack.assert_preserved(before)
+        require(parent["Image"] == latest and
+                parent["HostConfig"]["NetworkMode"] == "none",
+                "Updated airgap parent acquired an unexpected network")
+        require(set(parent["NetworkSettings"]["Networks"]) <= {"none"},
+                "Updated airgap parent attached to an egress-capable network")
+        print("PASS: no-network parent and both children stayed isolated",
+              flush=True)
+
+
 def test_automatic_scheduler(latest):
     print("===== real unattended Watchtower polling of TWO clients =====", flush=True)
     docker("tag", OLD, MOVING)
@@ -331,6 +376,8 @@ def main():
     try:
         test_child(latest)
         test_parent(latest)
+        test_parent_only_unselected_clients(latest)
+        test_airgap_parent(latest)
         test_automatic_scheduler(latest)
         test_registry_failure()
     finally:

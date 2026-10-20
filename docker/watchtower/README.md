@@ -48,10 +48,12 @@ attached to the old container ID. The runner correctly FAILED.
 
 The guarded migration now verifies that **every running network-sharing
 dependent of every targeted parent is on the same exact target list**.
-It refuses partial network groups; the follow-up canary explicitly targets
-the parent and both dependents together. Do not enable the fork if this
-combined canary still fails. Watchtower dependency ordering is not the
-same as a guarantee of automatic repair for unselected dependents.
+It refuses partial network groups. [The successful follow-up Docker canary
+(run 39410256380)](https://github.com/dillacorn/omv-remote-dots/actions/runs/39410256380)
+updated the parent and reattached BOTH selected dependents, verified running
+on the new parent's namespace. Its direct-child update also passed.
+Watchtower dependency ordering is not a guarantee of repairing dependents
+that are omitted from the watched scope.
 
 ## SMTP and scheduling
 
@@ -111,6 +113,9 @@ CI: `.github/workflows/watchtower-fork-tests.yml`
   `network_mode: service:parent` app, with untouched parent/sibling
 - Real parent update with two network-sharing dependent applications,
   all verified running and attached to the updated parent
+- Real always-running Watchtower daemon with short polling interval
+  automatically updates two selected network-sharing applications, preserves
+  their parent and exits cleanly on disposal
 
 If any live test fails, this migration is **BLOCKED**. It is not permission
 to deploy the same untested behavior to the live OMV host.

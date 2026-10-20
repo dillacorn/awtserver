@@ -316,8 +316,8 @@ def preflight():
                  "*-*-* 05:00:00 America/New_York",
                  check=False).returncode == 0,
          "Installed systemd does not understand the verifier timer")
-    need(not any((UNITS / name).exists() for name in
-                 (VERIFY_TIMER, VERIFY_SERVICE)),
+    need(not any((UNITS / name).exists() or (UNITS / name).is_symlink()
+                 for name in (VERIFY_TIMER, VERIFY_SERVICE)),
          "Existing verifier systemd unit; refuse overwriting")
     need(all(not n.endswith("-old") and "-old-" not in n
              for n in fleet if state(fleet[n]) == "running"),
@@ -393,15 +393,15 @@ def verify_runtime(fleet, manifest):
 
 
 def verify_and_alert(notify):
-    need(ROOT.is_dir(), "No installed Watchtower directory")
-    source = ROOT / "targets.json"
-    need(source.is_file(), "Installed target list unavailable")
-    manifest = json.loads(source.read_text())
     try:
+        need(ROOT.is_dir(), "No installed Watchtower directory")
+        source = ROOT / "targets.json"
+        need(source.is_file(), "Installed target list unavailable")
+        manifest = json.loads(source.read_text())
         names = verify_runtime(containers(), manifest)
         print(f"PASS: {len(names)} target containers healthy/running; "
               "network dependencies and updater verified")
-    except (Stop, KeyError, ValueError, TypeError) as exc:
+    except (Stop, OSError, KeyError, ValueError, TypeError) as exc:
         # Errors below contain only container names/configuration descriptors,
         # never SMTP passwords or Docker inspect environments.
         reason = str(exc)

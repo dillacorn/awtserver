@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          python3 -m py_compile docker/watchtower/*.py tests/watchtower_fork_live.py
+          python3 -m py_compile docker/watchtower/*.py tests/watchtower_fork_*.py
           python3 -m unittest discover -s tests -p 'test_watchtower_fork*.py' -v
           docker compose -f docker/watchtower/compose.yml config --quiet
   live-docker:
@@ -32,3 +32,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Real v1.23.1 child and parent namespace tests
         run: python3 tests/watchtower_fork_live.py
+
+  live-gluetun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Real Gluetun no-tunnel firewall and dependency update
+        run: python3 tests/watchtower_fork_gluetun_live.py

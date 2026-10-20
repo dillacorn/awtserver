@@ -31,6 +31,8 @@ def compose_labels():
     return {
         "com.docker.compose.project": "apps",
         "com.docker.compose.service": "app",
+        "com.docker.compose.project.config_files": str(Path(__file__).resolve()),
+        "com.docker.compose.project.working_dir": str(Path(__file__).resolve().parent),
     }
 
 
@@ -64,6 +66,18 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("transmission", targets)
         self.assertIn("mullvad-browser", targets)
         self.assertNotIn("freshdock", targets)
+
+    def test_original_compose_source_must_exist(self):
+        fleet = self.fleet()
+        fleet["app00"]["Config"]["Labels"][
+            "com.docker.compose.project.config_files"] = "/nonexistent/ci/compose.yml"
+        with self.assertRaisesRegex(migration.Stop, "configuration file missing"):
+            migration.selection(fleet)
+        fleet = self.fleet()
+        fleet["gluetun"]["Config"]["Labels"][
+            "com.docker.compose.project.working_dir"] = "/nonexistent/ci"
+        with self.assertRaisesRegex(migration.Stop, "working directory missing"):
+            migration.selection(fleet)
 
     def test_vpn_firewall_bypass_and_capability_guards(self):
         fleet = self.fleet()

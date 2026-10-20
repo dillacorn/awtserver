@@ -196,6 +196,7 @@ def test_child(latest):
         # this version resolves its notification URL from a bind-mounted file.
         notification = Path(stack.temp.name) / "notification_url"
         notification.write_text("logger://\n")
+        notification.chmod(0o600)  # Match production root-only SMTP secret.
         output = stack.watchtower("child", notification_file=notification)
         # The 'notify=no' log field is unrelated to whether Shoutrrr
         # successfully used the logger transport. Assert the emitted report.

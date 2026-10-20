@@ -1,0 +1,13 @@
+# Never commit live server inventories, credentials, or restore bundles.
+inventory.json
+inventory-*.json
+summary.txt
+reports/
+private/
+secrets/
+backups/
+*.tar
+*.tar.gz
+*.tar.zst
+*.age
+*.gpg

@@ -109,6 +109,38 @@ all 55 containers' real Compose paths and persistence dependencies; external
 secret backup/restore strategy. Identifying these requires current live
 facts rather than guessing from repo examples.
 
+## Second live review checkpoint: dependency audit
+
+The user supplied a focused review of the same private October 20 inventory.
+A sanitized interpretation is saved in
+[host-findings-2026-10-20.md](host-findings-2026-10-20.md), without
+publishing disk UUIDs, authentication policies, user names or private
+Docker source paths.
+
+Important new findings:
+
+- One Samba share depends on the mergerfs storage view; the enabled
+  mergerfs mount unit requires direct filesystem-type verification.
+- SSH/Fail2ban must be migrated as a coordinated access policy, not simply
+  copied from OMV. The *actual* SSH settings remain private.
+- Docker has 55 running Compose-provenance-backed containers and 12 named
+  volumes. Stale Freshdock overlays are still part of many Compose source
+  references. Preserve source identity until explicitly migrated.
+- OMV backup, FTP, ClamAV, SMART/mail and network facilities overlap with
+  ordinary Debian programs. Enabling a unit or installing an OMV plugin
+  does not establish ongoing use.
+- The 64 GB unmounted device must be identified before any disk-selection
+  or restore script is constructed.
+
+The next one-shot probe is [native_audit.py](native_audit.py).
+It **only reads** live systemd states, mergerfs mount types, the presence
+and count of OMV scheduled tasks where available, basic backup indicators
+and Podman container names. It prints no SSH policy values, login keys,
+firewall rules, Docker environment values or OMV scheduled job commands.
+Use its private terminal output to decide which host features to retain.
+The workflow tests audit parsing and sensitive-field suppression; it does
+not validate actual host service behavior.
+
 ## Rebuild milestones
 
 1. **Inventory:** Run `inventory.py`; analyze the private report and compare

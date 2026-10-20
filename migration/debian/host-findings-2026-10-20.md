@@ -8,6 +8,17 @@ full Docker Compose paths to this public repository.
 
 **No server changes were made** by the inventory.
 
+## User-confirmed future service choices
+
+- **Keep:** SSH/TTY, FTP/ProFTPD and matching Fail2ban jails, Docker Compose,
+  existing storage/backup/UPS/SMART/DNS/network dependencies.
+- **Optional:** Samba/SMB (and WSDD for Windows share discovery). Preserve
+  share configuration privately; install or enable only on user request after
+  Debian cutover. User reports rarely using SMB.
+- **Omit:** NetBird, Podman, Podman auto-update/restart timer units.
+- **Current OMV host:** do not stop, remove or modify any of the above during
+  discovery.
+
 ## Confirmed running services to preserve or deliberately replace
 
 - Debian 12 Bookworm, UEFI boot. Future target is stable minimal Debian
@@ -22,18 +33,18 @@ full Docker Compose paths to this public repository.
   retains a verified SSH jail; OMV UI jail must be retired when OMV is gone;
   FTP jail only if FTP itself is retired after confirming use.
 - One Samba share consumes the mergerfs data directory. No active NFS exports
-  were reported. Preserve Samba users, permissions, ownership and share
-  access policy.
+  were reported. User rarely uses SMB and explicitly wants it **optional** on
+  future Debian, not a mandatory running service. Preserve the share's private
+  configuration and identity/ownership data for opt-in restoration only.
 - Four 8 TB ext4 array disks (three SnapRAID data + one parity) and an
   independent 240 GB SSD OS disk were observed. A separate approximately
   64 GB block device has a filesystem but was *not mounted*; establish its
   purpose before any new OS installation.
 - SnapRAID reports no pending/incomplete sync in this captured inventory,
   following the user's successful prehashed sync and scrub.
-- A dedicated mergerfs systemd mount unit is enabled, but the first report
-  failed to display an active `fuse.mergerfs` mount. Investigate how
-  `findmnt` reports its filesystem type and source: **do not infer it
-  is absent** because a filtered inventory report was empty.
+- The second live read-only audit **confirmed mergerfs mounted** at the
+  Samba data-share target and its parent, with the systemd mount unit active
+  and enabled. The initial blank listing was an inventory traversal limitation.
 - Host UPS identifies an APC Back-UPS model with online status. Preserve
   shutdown thresholds and daemon configuration independently of OMV.
 - Tailscale host daemon is running, alongside numerous application Tailscale
@@ -43,10 +54,12 @@ full Docker Compose paths to this public repository.
 
 - ClamAV (`clamav-daemon`, `clamav-freshclam`)
 - Chrony, Avahi/mDNS, collectd
-- `netbird.service` and Podman (including auto-update/restart services and
-  timers); an enabled unit alone does **not** prove an active application stack
+- NetBird daemon active, Podman unit/timer configured but **zero Podman
+  containers** discovered. User explicitly does not use either: omit both
+  from the replacement Debian OS; do not modify current OMV.
 - Postfix for mail/alerts
-- ProFTPD and associated Fail2ban jail (actual client/use unknown)
+- ProFTPD and associated Fail2ban jail: **retain** on future Debian; user
+  confirms FTP is one of the two primary access methods (alongside SSH).
 - RPC bind, wsdd-server
 - NVIDIA CDI refresh (GPU-dependent applications may need equivalent support)
 - systemd-networkd and systemd-resolved: critical for the network bootstrap
@@ -80,8 +93,9 @@ Tailscale interface policies, forwarded service ports and Docker rules.
   volatile `/dev/sdX`; identify OS SSD by model/serial before installation.
 - Preserve existing SnapRAID content and parity files. Do not initialize,
   reformat, resync or modify disk identifiers as part of discovery.
-- Verify live mergerfs mount behavior, branch source paths, mount ordering
-  and Samba's dependency on the merged view.
+- Mergerfs is verified active. Preserve the mergerfs branch sources,
+  mount ordering and dependent Docker/FTP paths. Samba is optional and
+  must not dictate whether mergerfs itself is mounted.
 - Check the currently unmounted device's purpose before selecting a new
   installation target. Existing data/parity drives must not be included in
   a scripted destructive installer.
@@ -111,9 +125,10 @@ Tailscale interface policies, forwarded service ports and Docker rules.
 
 1. Inspect *live* mergerfs target and backing filesystem type, root/network
    mount units, and whether the unmounted ~64 GB device is backup/recovery.
-2. Distinguish running vs merely enabled for NetBird, Podman, ProFTPD,
-   ClamAV, collectd, SMART, mail, Chrony, nginx/PHP, backup-related daemons.
-   Check Podman container inventory without starting a daemon.
+2. Latest live probe confirmed active ProFTPD, ClamAV, collectd, SMART, mail,
+   Chrony, nginx/PHP and NetBird, with zero Podman containers. Confirm whether
+   optional active utilities have dependencies on Docker/FTP; omit NetBird and
+   Podman in the future OS by explicit user choice.
 3. Inventory actual OMV plugin settings and scheduled jobs separately from
    systemd timers and root crontab: a zero root cron count does not mean
    there are no automated tasks.

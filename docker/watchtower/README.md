@@ -24,6 +24,11 @@ It validates the real OMV host, Docker and Compose, and the currently
 Freshdock nightly opt-ins and the three additional intended VPN stack
 containers, for a strict **24-container** Watchtower *positional allowlist*.
 
+The host preflight requires real Docker Compose project/service labels,
+existing Compose configuration-file paths and working directories for **all
+24 targets**. Missing original Compose sources block migration rather than
+allowing an updater to remove a container without a reliable recovery source.
+
 Unlike Freshdock, Watchtower can target these names without changing
 application labels, image IDs, bind mounts or Compose configurations.
 Therefore **no existing application is recreated during updater installation**.

@@ -10,7 +10,8 @@ import replace_freshdock as migration
 
 
 def make_container(name, running=True, labels=None, network="bridge",
-                   identity=None, health=None):
+                   identity=None, health=None, cap_add=None, privileged=False,
+                   env=None):
     identity = identity or name + "0123456789abcdef"
     return {
         "Id": identity,
@@ -18,8 +19,10 @@ def make_container(name, running=True, labels=None, network="bridge",
         "State": {"Status": "running" if running else "exited",
                   "Paused": False,
                   "Health": {"Status": health} if health else {}},
-        "Config": {"Image": "busybox:latest", "Labels": labels or {}},
+        "Config": {"Image": "busybox:latest", "Labels": labels or {},
+                   "Env": env or []},
         "HostConfig": {"NetworkMode": network,
+                       "CapAdd": cap_add or [], "Privileged": privileged,
                        "RestartPolicy": {"Name": "no"}},
     }
 
@@ -43,7 +46,8 @@ class MigrationTests(unittest.TestCase):
         ) for i in range(21)}
         gluetun = make_container(
             "gluetun", labels=compose_labels() |
-            {"com.docker.compose.service": "gluetun"}, health="healthy")
+            {"com.docker.compose.service": "gluetun"}, health="healthy",
+            cap_add=["NET_ADMIN"])
         fleet["gluetun"] = gluetun
         for name in ("transmission", "mullvad-browser"):
             fleet[name] = make_container(
@@ -60,6 +64,30 @@ class MigrationTests(unittest.TestCase):
         self.assertIn("transmission", targets)
         self.assertIn("mullvad-browser", targets)
         self.assertNotIn("freshdock", targets)
+
+    def test_vpn_firewall_bypass_and_capability_guards(self):
+        fleet = self.fleet()
+        fleet["gluetun"]["HostConfig"]["CapAdd"] = []
+        with self.assertRaisesRegex(migration.Stop, "NET_ADMIN"):
+            migration.selection(fleet)
+        fleet = self.fleet()
+        fleet["gluetun"]["Config"]["Env"] = [
+            "FIREWALL_OUTBOUND_SUBNETS=0.0.0.0/0"]
+        with self.assertRaisesRegex(migration.Stop, "nonlocal outbound"):
+            migration.selection(fleet)
+        fleet = self.fleet()
+        fleet["gluetun"]["Config"]["Env"] = [
+            "FIREWALL_OUTBOUND_SUBNETS=192.168.68.0/24"]
+        self.assertEqual(len(migration.selection(fleet)), 24)
+        fleet["transmission"]["HostConfig"]["Privileged"] = True
+        with self.assertRaisesRegex(migration.Stop, "override"):
+            migration.selection(fleet)
+
+    def test_legacy_vaultwarden_explicitly_denied(self):
+        fleet = self.fleet()
+        fleet["vaultwarden"] = fleet.pop("app00")
+        with self.assertRaisesRegex(migration.Stop, "Legacy Vaultwarden"):
+            migration.selection(fleet)
 
     def test_ineligible_network_or_unreviewed_client_blocks(self):
         fleet = self.fleet()

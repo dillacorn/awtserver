@@ -149,7 +149,7 @@ class TestStack:
             require((bind / "keep.txt").read_text() == "persistent-" + service,
                     f"{service}: persistent bind-mount data was altered")
 
-    def watchtower(self, *names):
+    def watchtower(self, *names, notification_file=None):
         target = [
             self.parent if name == "parent"
             else self.children[0] if name == "child"
@@ -159,9 +159,13 @@ class TestStack:
         ]
         name = self.id + "-watchtower"
         # No scheduler active on OMV, no notification and strict positionals.
-        p = docker("run", "--rm", "--name", name,
+        options = ["--rm", "--name", name,
                    "-v", "/var/run/docker.sock:/var/run/docker.sock",
-                   "-e", "TZ=America/New_York",
+                   "-e", "TZ=America/New_York"]
+        if notification_file is not None:
+            options += ["-v", str(notification_file) + ":/run/secrets/notification_url:ro",
+                        "-e", "WATCHTOWER_NOTIFICATION_URL=/run/secrets/notification_url"]
+        p = docker("run", *options,
                    WATCHTOWER, "--run-once", "--no-startup-message",
                    *target, timeout=270, check=False)
         print("===== Watchtower v1.23.1 logs =====", flush=True)
@@ -187,7 +191,12 @@ def test_child(latest):
         old_child = inspect(stack.children[0])["Id"]
         other_child = inspect(stack.children[1])["Id"]
         protected = stack.protected_snapshot()
-        stack.watchtower("child")
+        # No credentials in the disposable CI test: logger:// verifies that
+        # this version resolves its notification URL from a bind-mounted file.
+        notification = Path(stack.temp.name) / "notification_url"
+        notification.write_text("logger://\n")
+        output = stack.watchtower("child", notification_file=notification)
+        require("notify=yes" in output, "Secret-file notification URL was not activated")
         stack.assert_running()
         stack.assert_preserved(protected)
         require(inspect(stack.parent)["Id"] == old_parent,
@@ -275,6 +284,34 @@ def test_automatic_scheduler(latest):
                     "Disposable unattended scheduler did not clean up")
 
 
+def test_registry_failure():
+    print("===== unavailable registry: original container must survive =====",
+          flush=True)
+    fake = "127.0.0.1:49999/ci-expected-unreachable:latest"
+    name = "wtci" + uuid.uuid4().hex[:9] + "-registry-failure"
+    docker("tag", OLD, fake)
+    docker("run", "-d", "--name", name, "--restart", "no",
+           fake, "sleep", "3600")
+    try:
+        before = inspect(name)
+        p = docker("run", "--rm", "--name", name + "-watchtower",
+                   "-v", "/var/run/docker.sock:/var/run/docker.sock",
+                   WATCHTOWER, "--run-once", "--no-startup-message",
+                   name, check=False, timeout=120)
+        current = inspect(name)
+        require(current and current["Id"] == before["Id"] and
+                current["State"]["Running"],
+                "Registry failure altered/stopped a running application")
+        require(any(x in p.stdout.lower() for x in
+                    ("error", "failed", "refused", "unavailable")),
+                "Registry failure did not produce an observable diagnostic")
+        print("PASS: failed registry check reported and original preserved",
+              flush=True)
+    finally:
+        docker("rm", "-f", name, check=False)
+        docker("image", "rm", fake, check=False)
+
+
 def main():
     require(os.environ.get("GITHUB_ACTIONS") == "true",
             "Only run in isolated GitHub Actions environment")
@@ -290,6 +327,7 @@ def main():
         test_child(latest)
         test_parent(latest)
         test_automatic_scheduler(latest)
+        test_registry_failure()
     finally:
         # Revert tag only on the disposable CI runner.
         docker("pull", MOVING, timeout=300, check=False)

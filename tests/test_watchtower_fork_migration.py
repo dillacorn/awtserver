@@ -41,12 +41,14 @@ class MigrationTests(unittest.TestCase):
         fleet = {f"app{i:02d}": make_container(
             f"app{i:02d}", labels=labels
         ) for i in range(21)}
-        vpn = compose_labels()
-        gluetun = make_container("gluetun", labels=vpn, health="healthy")
+        gluetun = make_container(
+            "gluetun", labels=compose_labels() |
+            {"com.docker.compose.service": "gluetun"}, health="healthy")
         fleet["gluetun"] = gluetun
         for name in ("transmission", "mullvad-browser"):
             fleet[name] = make_container(
-                name, labels=vpn,
+                name, labels=compose_labels() |
+                {"com.docker.compose.service": name},
                 network="container:" + gluetun["Id"])
         return fleet
 

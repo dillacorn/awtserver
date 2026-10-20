@@ -118,9 +118,13 @@ def emit_review(data):
              " type=" + fmt(entry.get("fstype")) +
              " redacted_options=" + str(entry.get("other_options_redacted", 0)))
     line("Active mergerfs mountpoints:")
-    for m in (storage.get("mounts") or {}).get("filesystems") or []:
-        if m.get("fstype") == "fuse.mergerfs":
-            line("  " + fmt(m.get("target")) + " (sources recorded privately)")
+    def visit_mounts(nodes):
+        for item in nodes or []:
+            kind = str(item.get("fstype") or "")
+            if kind == "fuse.mergerfs" or kind == "mergerfs":
+                line("  " + fmt(item.get("target")) + " (sources recorded privately)")
+            visit_mounts(item.get("children"))
+    visit_mounts((storage.get("mounts") or {}).get("filesystems"))
     snap = storage.get("snapraid") or {}
     line("SnapRAID directives:")
     for d in snap.get("directives") or []:

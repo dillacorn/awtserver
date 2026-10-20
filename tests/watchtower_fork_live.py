@@ -196,7 +196,11 @@ def test_child(latest):
         notification = Path(stack.temp.name) / "notification_url"
         notification.write_text("logger://\n")
         output = stack.watchtower("child", notification_file=notification)
-        require("notify=yes" in output, "Secret-file notification URL was not activated")
+        # The 'notify=no' log field is unrelated to whether Shoutrrr
+        # successfully used the logger transport. Assert the emitted report.
+        require('msg="Shoutrrr: Found new image:' in output and
+                stack.children[0] in output,
+                "Secret-file Shoutrrr logger did not receive the update report")
         stack.assert_running()
         stack.assert_preserved(protected)
         require(inspect(stack.parent)["Id"] == old_parent,

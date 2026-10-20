@@ -46,8 +46,10 @@ network-sharing application **passes**, but updating *only the parent*
 without selecting its two running dependents left those dependents
 attached to the old container ID. The runner correctly FAILED.
 
-The guarded migration now verifies that **every running network-sharing
-dependent of every targeted parent is on the same exact target list**.
+The guarded migration now verifies that **every network-sharing
+dependent (including stopped containers) of every targeted parent is on
+the same exact target list**, and rejects explicit/Compose dependency labels
+that hide the true network parent.
 It refuses partial network groups. [The successful follow-up Docker canary
 (run 39410256380)](https://github.com/dillacorn/omv-remote-dots/actions/runs/39410256380)
 updated the parent and reattached BOTH selected dependents, verified running
@@ -63,14 +65,38 @@ existing private SMTP destination and credentials.
 
 The original `/docker/freshdock/freshdock.toml` is parsed privately and
 converted to a Shoutrrr SMTP URL with explicit `ExplicitTLS`/STARTTLS
-(port 587) or `ImplicitTLS` (465). The URL is stored at
+(port 587) or `ImplicitTLS` (465). STARTTLS on 587 is explicitly required (fail closed if the SMTP server
+does not advertise STARTTLS); 465 uses implicit TLS from the outset.
+The URL is stored at
 `/docker/watchtower-fork/notification_url` mode 0600; Watchtower reads
 it from `/run/secrets/notification_url`. Docker inspect and Compose
 environment reveal **only the secret file path**, never the password.
 
 Watchtower does not provide Freshdock's equivalent preflight
-health-gated rollback guarantee. A failed update can still interrupt an
-application. The isolated live Docker CI must pass before production apply.
+health-gated rollback guarantee. The v1.23.1 batch update implementation
+stops dependents, replaces the parent, and starts dependents in graph order,
+but **does not wait for the new parent's Docker health status** before starting
+its children. Its health-waiting rolling restart feature explicitly does not
+support linked containers. Thus namespace reattachment alone **does not
+prove the VPN kill switch is engaged before Transmission/Mullvad Browser starts**.
+The actual Gluetun startup and firewall sequence must be established before
+unattended production VPN-parent updates can be approved.
+
+The v1.23.1 application-create/start failure path records failures but does
+**not automatically restore the previous application container**. The old
+image remains available when cleanup is disabled, but recovery would require
+an explicit, separately validated procedure. SMTP notification delivery can
+also fail independently, so a log or successful daemon startup is not proof
+an outage will be noticed.
+
+**Production deployment remains blocked on VPN readiness/egress assurance and
+a failure-response plan**, even if all isolated Docker network tests pass.
+Do not silently drop the VPN trio from the requested 24-target scope.
+An alternative to evaluate if the fork cannot provide this guarantee is a
+health-gated coordinated Compose update for the complete VPN group, or a
+tested change to Watchtower's dependency-restart lifecycle. Either approach
+requires inspecting actual OMV Compose identities and should be validated
+on disposable stacks first, not improvised against production.
 
 ## Guarded host migration
 

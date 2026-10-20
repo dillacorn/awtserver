@@ -77,6 +77,16 @@ def main():
         parent = token + "-gluetun"
         clients = [token + "-transmission", token + "-browser"]
         config = Path(temporary) / "compose.yml"
+        leak_dirs = [Path(temporary) / "client-one", Path(temporary) / "client-two"]
+        for leak_dir in leak_dirs:
+            leak_dir.mkdir()
+        # The client entrypoints actively attempt outbound TCP as soon as
+        # Docker starts them, including the vulnerable post-parent-recreate
+        # window, instead of probing only later with docker exec.
+        initial_egress_probe = ("for i in 1 2 3 4 5 6 7 8; do "
+                                "if nc -z -w 1 1.1.1.1 443; then "
+                                "touch /sentinel/EGRESS_LEAK; fi; "
+                                "sleep 0.1; done; sleep 3600")
         # No real VPN connection can be established: RFC 5737 TEST-NET-3 endpoint.
         private_key = base64.b64encode(secrets.token_bytes(32)).decode()
         peer_key = base64.b64encode(secrets.token_bytes(32)).decode()
@@ -98,14 +108,16 @@ def main():
   transmission:
     image: {CLIENT}
     container_name: {clients[0]}
-    command: ["sleep", "3600"]
+    command: ["sh", "-c", "{initial_egress_probe}"]
+    volumes: ["{leak_dirs[0]}:/sentinel"]
     network_mode: service:gluetun
     depends_on: [gluetun]
     restart: "no"
   browser:
     image: {CLIENT}
     container_name: {clients[1]}
-    command: ["sleep", "3600"]
+    command: ["sh", "-c", "{initial_egress_probe}"]
+    volumes: ["{leak_dirs[1]}:/sentinel"]
     network_mode: service:gluetun
     depends_on: [gluetun]
     restart: "no"
@@ -123,6 +135,8 @@ def main():
                 ensure(inspect(name) and inspect(name)["State"]["Running"],
                        f"{name} was not running before update")
                 isolated(name)
+            ensure(not any((p / "EGRESS_LEAK").exists() for p in leak_dirs),
+                   "VPN egress leaked during initial dependent startup")
             ensure((old_parent["State"].get("Health") or {}).get("Status") !=
                    "healthy", "Impossible VPN unexpectedly reported healthy")
             print("PASS: disconnected Gluetun blocks both dependent clients",
@@ -152,6 +166,8 @@ def main():
                 for attempt in range(4):
                     isolated(name)
                     time.sleep(1)
+            ensure(not any((p / "EGRESS_LEAK").exists() for p in leak_dirs),
+                   "VPN egress leaked during restart of either dependent")
             ensure((newer["State"].get("Health") or {}).get("Status") !=
                    "healthy", "Invalid VPN became unexpectedly healthy")
             print("PASS: new Gluetun and both dependents reattached; "

@@ -79,6 +79,26 @@ def label(c, key):
     return (c.get("Config", {}).get("Labels") or {}).get(key, "")
 
 
+def compose_source_preflight(c, name):
+    """Require actual existing Compose sources before allowing updates.
+
+    Watchtower can remove the original container during a failed recreate.
+    Without its original Compose file, recovery would be unnecessarily risky.
+    """
+    need(label(c, "com.docker.compose.project") and
+         label(c, "com.docker.compose.service"),
+         f"{name}: missing Compose project/service identity")
+    paths = label(c, "com.docker.compose.project.config_files")
+    need(paths, f"{name}: original Compose source paths unavailable")
+    for raw in paths.split(","):
+        source = Path(raw.strip())
+        need(source.is_absolute() and source.is_file(),
+             f"{name}: original Compose configuration file missing")
+    working = label(c, "com.docker.compose.project.working_dir")
+    need(working and Path(working).is_dir(),
+         f"{name}: original Compose working directory missing")
+
+
 def valid_parent(c, fleet):
     mode = c["HostConfig"].get("NetworkMode") or ""
     if not mode.startswith("container:"):
@@ -143,18 +163,15 @@ def selection(fleet):
         need(label(c, "freshdock.mode") == "nightly" and
              label(c, "freshdock.schedule") == MODE_CRON,
              f"{n}: unexpected Freshdock schedule/mode")
-        need(label(c, "com.docker.compose.project") and
-             label(c, "com.docker.compose.service") and
-             valid_parent(c, fleet),
-             f"{n}: unexpected Compose identity or stale network parent")
+        compose_source_preflight(c, n)
+        need(valid_parent(c, fleet),
+             f"{n}: stale network parent")
     need(not set(VPN) & set(enabled),
          "VPN trio already in Freshdock selected set, unexpected prior migration")
     for n in VPN:
         need(n in fleet and state(fleet[n]) == "running",
              f"VPN container {n} missing/not running")
-        need(label(fleet[n], "com.docker.compose.project") and
-             label(fleet[n], "com.docker.compose.service"),
-             f"{n}: missing Compose identity")
+        compose_source_preflight(fleet[n], n)
     parent = fleet["gluetun"]
     need((parent["State"].get("Health") or {}).get("Status") == "healthy",
          "Gluetun VPN parent not healthy")

@@ -11,6 +11,7 @@ A successful install is not proof of successful future unattended upgrades.
 """
 import argparse
 from datetime import datetime
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -83,6 +84,46 @@ def valid_parent(c, fleet):
     )
 
 
+def vpn_firewall_preflight(fleet):
+    """Fail closed on known ways clients could bypass Gluetun's firewall.
+
+    This is a static runtime configuration audit, NOT a real VPN egress test.
+    """
+    gluetun = fleet["gluetun"]
+    host = gluetun["HostConfig"]
+    caps = {str(cap).upper().removeprefix("CAP_")
+            for cap in (host.get("CapAdd") or [])}
+    need("NET_ADMIN" in caps,
+         "Gluetun lacks explicit NET_ADMIN needed for its kill switch")
+    need(host.get("NetworkMode") != "host",
+         "Gluetun must not operate in host network mode")
+    env = dict(item.split("=", 1) for item in
+               (gluetun["Config"].get("Env") or []) if "=" in item)
+    outbound = env.get("FIREWALL_OUTBOUND_SUBNETS", "").strip()
+    # Gluetun explicitly exempts these subnets from VPN routing/firewall.
+    # Don't authorize routable public exceptions or a global bypass.
+    local_ranges = [
+        ipaddress.ip_network(value)
+        for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+                      "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
+                      "fc00::/7", "fe80::/10", "::1/128")
+    ]
+    for item in filter(None, (x.strip() for x in outbound.split(","))):
+        try:
+            network = ipaddress.ip_network(item, strict=False)
+        except ValueError:
+            raise Stop("Invalid Gluetun outbound firewall subnet") from None
+        need(any(network.subnet_of(allowed) for allowed in local_ranges
+                 if network.version == allowed.version),
+             "Gluetun firewall has an unapproved nonlocal outbound bypass")
+    for name in ("transmission", "mullvad-browser"):
+        host = fleet[name]["HostConfig"]
+        caps = {str(cap).upper().removeprefix("CAP_")
+                for cap in (host.get("CapAdd") or [])}
+        need("NET_ADMIN" not in caps and not host.get("Privileged", False),
+             f"{name}: VPN client can override the shared firewall")
+
+
 def selection(fleet):
     enabled = sorted(
         n for n, c in fleet.items()
@@ -114,6 +155,7 @@ def selection(fleet):
     for n in ("transmission", "mullvad-browser"):
         need(fleet[n]["HostConfig"]["NetworkMode"] == "container:" + parent["Id"],
              f"{n} does not share the CURRENT Gluetun network namespace")
+    vpn_firewall_preflight(fleet)
     # A stopped dependent may be started later, still referencing the old
     # parent ID after replacement. Block unknown clients regardless of state.
     for n, c in fleet.items():
@@ -121,6 +163,8 @@ def selection(fleet):
             need(n in ("transmission", "mullvad-browser"),
                  f"Unreviewed additional Gluetun network client: {n}")
     targets = tuple(sorted(set(enabled) | set(VPN)))
+    need(not {"vaultwarden", "nginx-vaultwarden"} & set(targets),
+         "Legacy Vaultwarden services must remain explicitly excluded")
     need(len(targets) == TOTAL_COUNT, "Allowlist must contain exactly 24 targets")
     watched = set(targets)
     for n in targets:

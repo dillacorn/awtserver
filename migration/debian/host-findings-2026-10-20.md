@@ -152,8 +152,9 @@ operations and follow-up verification:
   `podman-auto-update.timer`: inactive, disabled.
 - `podman-restart.service`: **failed** (not running), disabled.
   This is a residual failed unit state, **not evidence that Podman is active**.
-  `systemctl reset-failed podman-restart.service` was suggested solely to
-  clear the failed indicator; execution is **not confirmed**.
+  The user subsequently reports running
+  `systemctl reset-failed podman-restart.service` to clear the failed-unit
+  indicator. No post-command unit-state output was supplied.
 - Existing Docker container inventory unchanged; checks confirmed SSH,
   host Tailscale, Docker, Pi-hole and Gluetun remained running.
 - No APT packages, Podman volumes, Docker applications, or persistent

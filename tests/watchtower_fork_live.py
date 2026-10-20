@@ -99,8 +99,13 @@ class TestStack:
         return parent
 
     def watchtower(self, *names):
-        target = [self.parent if name == "parent" else self.children[0]
-                  for name in names]
+        target = [
+            self.parent if name == "parent"
+            else self.children[0] if name == "child"
+            else self.children[1] if name == "child2"
+            else (_ for _ in ()).throw(ValueError("Unknown test target"))
+            for name in names
+        ]
         name = self.id + "-watchtower"
         # No scheduler active on OMV, no notification and strict positionals.
         p = docker("run", "--rm", "--name", name,
@@ -149,7 +154,9 @@ def test_parent(latest):
     with TestStack("parent") as stack:
         before = {n: inspect(n)["Id"] for n in
                   [stack.parent, *stack.children]}
-        stack.watchtower("parent")
+        # All network dependents must be part of the watched scope.
+        # v1.23.1 left them stale when only the parent was selected.
+        stack.watchtower("parent", "child", "child2")
         stack.assert_running()
         require(inspect(stack.parent)["Image"] == latest and
                 inspect(stack.parent)["Id"] != before[stack.parent],

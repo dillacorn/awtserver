@@ -16,12 +16,12 @@ and systemd, not a second source of truth.
 
 ## First step: collect CURRENT host evidence
 
-Run the read-only script \`inventory.py\` on the actual host as root. It requires
-\`hostname=openmediavault\`, reads source-of-truth runtime state rather than
+Run the read-only script `inventory.py` on the actual host as root. It requires
+`hostname=openmediavault`, reads source-of-truth runtime state rather than
 assuming that this repository matches the server, and writes only to a root-only
-directory under \`/root/debian-migration-inventory\`.
+directory under `/root/debian-migration-inventory`.
 
-The result has a brief terminal summary and a private \`inventory.json\`.
+The result has a brief terminal summary and a private `inventory.json`.
 The full file includes disk UUIDs/serials, addresses, usernames, mount paths,
 Docker source paths and other PRIVATE infrastructure metadata; it must **never
 be committed to this public GitHub repository**. It does **not** collect
@@ -52,7 +52,7 @@ This is an inventory, **not a verified backup**.
   Copy config privately only after review; never publish protected IPs/keys.
 - UPS: determine whether APCUPSD or NUT actually controls shutdown.
 - SMART: determine smartd mail routing and current device by-id paths, not
-  unstable \`/dev/sdX\` identifiers.
+  unstable `/dev/sdX` identifiers.
 - SSH/firewall: test access from LAN and Tailscale independently *before*
   enabling restrictive policies; do not lock out recovery access.
 - SnapRAID/mergerfs: preserve identical disks and parity/content metadata;
@@ -66,11 +66,52 @@ This is an inventory, **not a verified backup**.
   Pi-hole DNS guard, Tailscale certificate renewal, SnapRAID AIO and OMV
   email/SMART alerts need native systemd timer or service replacements.
 - Any OMV-created configuration must be reconstructed explicitly;
-  do **not** blindly import \`/etc/openmediavault/config.xml\` into Debian.
+  do **not** blindly import `/etc/openmediavault/config.xml` into Debian.
+
+## First real OMV inventory checkpoint (October 20, 2026)
+
+The user ran the SHA-pinned **read-only** inventory on the verified
+`openmediavault` host. The terminal summary (safe facts only) confirms:
+
+| Observed live fact | October 20 result |
+|---|---|
+| Base OS and boot | Debian 12 Bookworm, UEFI |
+| Docker fleet | 55 total container records; 12 named Docker volumes |
+| Running queried native services | SSH, Fail2ban, Docker, cron, Samba (`smbd`), APC UPS (`apcupsd`), host Tailscale (`tailscaled`), `pihm-web`, unattended upgrades |
+| Fail2ban jails | `omv-webgui`, `proftp`, `ssh` |
+| Samba / NFS | 1 Samba share, 0 exported NFS paths |
+| systemd | 75 enabled unit names in saved private inventory |
+| root user's crontab | 0 schedules (does not exclude system crontabs/timers or OMV schedules) |
+| SnapRAID | 38 directives present |
+| APT infrastructure | 62 relevant installed package entries |
+
+**Interpretation:** Keep the actual SSH Fail2ban jail when reconstructing
+Debian. `omv-webgui` is likely obsolete without OMV; `proftp` may be
+obsolete **only after** confirming whether an FTP daemon is still used.
+Do not remove either while OMV is running. Do not equate the 55 Docker records
+with 55 running services or the 75 enabled units with 75 active processes.
+The 1 Samba share's definition, access policy and UID/GID still require audit.
+
+**Next data handoff:** The JSON was saved privately at
+`/root/debian-migration-inventory/20261020-135204-875455/inventory.json`.
+Run the separately reviewed `review.py` against this existing JSON to
+produce a targeted, private chat report: actual unit/timer names, fail2ban
+config entry points, storage and mergerfs mounts, Samba share paths,
+Docker Compose provenance, UPS/mail program availability and installed
+infrastructure packages. This does not collect additional host data or
+change any services. The full original JSON should remain outside public Git.
+
+**Still unknown:** OMV plugins and DB state versus true host config sources;
+actual effective fail2ban jail configurations and log sources; SMB users and
+permissions; UPS shutdown policy and connection; SMART/email service settings;
+any scheduled OMV UI tasks; system firewall policy; static IP/resolver policy;
+all 55 containers' real Compose paths and persistence dependencies; external
+secret backup/restore strategy. Identifying these requires current live
+facts rather than guessing from repo examples.
 
 ## Rebuild milestones
 
-1. **Inventory:** Run \`inventory.py\`; analyze the private report and compare
+1. **Inventory:** Run `inventory.py`; analyze the private report and compare
    real state with repo documentation. Identify unknown host services.
 2. **Configuration audit:** For every host-native service, document source
    files, owners, UID/GID, dependencies, secrets required and exact systemd
@@ -89,7 +130,7 @@ This is an inventory, **not a verified backup**.
 6. **Actual cutover:** Physically remove/disconnect or positively isolate
    existing data/parity disks during the **new OS SSD installer** as practical,
    verify target disk serial/capacity and boot path, and preserve old SSD.
-   Mount data disks only after reviewing \`blkid\`, \`lsblk\`, and \`fstab\`.
+   Mount data disks only after reviewing `blkid`, `lsblk`, and `fstab`.
 7. **Acceptance tests:** SSH LAN/Tailscale, DNS/Pi-hole, mergerfs and SnapRAID,
    fail2ban, firewall, Samba/NFS, UPS/smartd email, all relevant Compose
    projects/volumes, Docker updates, systemd timers and backup restore.
@@ -115,7 +156,7 @@ one tool should own a given daemon's actual configuration.
   currently contains **no executable deployment script**.
 - Never use inventory JSON as configuration, a disk restore manifest or a
   backup. The command deliberately does not capture secrets or contents.
-- No indiscriminate \`rsync\` of live Docker DBs or SnapRAID parity while
+- No indiscriminate `rsync` of live Docker DBs or SnapRAID parity while
   writers are running. SnapRAID is not a replacement for backups.
 - Do not assume the Intel OS SSD is failing solely because a SMART report
   had a nonzero error count. There is no immediate migration deadline.
@@ -124,8 +165,10 @@ one tool should own a given daemon's actual configuration.
 
 ## What to do after the first inventory
 
-Supply the terminal summary first, followed by the private JSON *in the
-conversation* after reviewing it. Never attach the inventory to a GitHub
+Supply the terminal summary first, then run `review.py` against the existing
+private JSON and paste its focused report into this PRIVATE conversation.
+Retain the original JSON for a later deeper audit; review it before attaching
+or transmitting it. Never attach the inventory to a GitHub
 issue, commit, release or public gist. The next phase will identify missing
 host-specific configurations and prioritize native replacements.
 

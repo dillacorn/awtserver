@@ -1,0 +1,20 @@
+# Documentation-only template. Do NOT run this file directly on OMV.
+# The guarded installer writes a private rendered copy to
+# /docker/watchtower-fork/compose.yml with an explicit 24-container allowlist.
+services:
+  watchtower:
+    image: nickfedor/watchtower:1.23.1
+    container_name: watchtower
+    command:
+      - --schedule
+      - "0 45 2 * * *"
+      - --no-startup-message
+      - __NO_PRODUCTION_TARGETS_WITHOUT_GUARDED_ENROLLMENT__
+    restart: "no"
+    environment:
+      TZ: America/New_York
+      WATCHTOWER_CLEANUP: "false"
+      WATCHTOWER_NOTIFICATION_URL: /run/secrets/notification_url
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./notification_url:/run/secrets/notification_url:ro

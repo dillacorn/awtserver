@@ -71,6 +71,21 @@ class MigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(migration.Stop, "Unreviewed"):
             migration.selection(fleet)
 
+    def test_selected_parent_with_unselected_live_client_blocks(self):
+        fleet = self.fleet()
+        fleet["stray"] = make_container(
+            "stray", labels=compose_labels(),
+            network="container:" + fleet["app00"]["Id"])
+        with self.assertRaisesRegex(migration.Stop, "Unsafe partial network group"):
+            migration.selection(fleet)
+
+    def test_explicit_legacy_watchtower_optout_blocks(self):
+        fleet = self.fleet()
+        fleet["app00"]["Config"]["Labels"][
+            "com.centurylinklabs.watchtower.enable"] = "false"
+        with self.assertRaisesRegex(migration.Stop, "legacy Watchtower opt-out"):
+            migration.selection(fleet)
+
     def test_stopped_freshdock_target_count_blocks(self):
         fleet = self.fleet()
         fleet["app00"]["State"]["Status"] = "exited"

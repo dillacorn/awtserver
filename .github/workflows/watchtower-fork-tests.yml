@@ -5,12 +5,14 @@ on:
     paths:
       - 'docker/watchtower/**'
       - 'tests/watchtower_fork_*'
+      - 'tests/test_watchtower_fork_*'
       - '.github/workflows/watchtower-fork-tests.yml'
   push:
     branches: [main]
     paths:
       - 'docker/watchtower/**'
       - 'tests/watchtower_fork_*'
+      - 'tests/test_watchtower_fork_*'
       - '.github/workflows/watchtower-fork-tests.yml'
 
 permissions:

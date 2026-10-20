@@ -140,3 +140,26 @@ Tailscale interface policies, forwarded service ports and Docker rules.
 
 **Status:** first private inventory reviewed. Migration scripting awaits
 these dependency and backup gates. No live server changes authorized.
+
+## Post-inventory operational cleanup (October 20, 2026)
+
+The user explicitly requested disabling unused NetBird and Podman on the
+**current** OMV host. Their root terminal reported successful stop/disable
+operations and follow-up verification:
+
+- `netbird.service`: inactive, disabled.
+- `podman.service`, `podman.socket`, `podman-auto-update.service`,
+  `podman-auto-update.timer`: inactive, disabled.
+- `podman-restart.service`: **failed** (not running), disabled.
+  This is a residual failed unit state, **not evidence that Podman is active**.
+  `systemctl reset-failed podman-restart.service` was suggested solely to
+  clear the failed indicator; execution is **not confirmed**.
+- Existing Docker container inventory unchanged; checks confirmed SSH,
+  host Tailscale, Docker, Pi-hole and Gluetun remained running.
+- No APT packages, Podman volumes, Docker applications, or persistent
+  configs were deleted. This cleanup is reversible.
+
+This supersedes the earlier inventory's *running NetBird* and *enabled
+Podman* states. Do not assume future service status without fresh host
+evidence. No other services were changed.
+

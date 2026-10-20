@@ -79,6 +79,29 @@ class MigrationTests(unittest.TestCase):
         with self.assertRaisesRegex(migration.Stop, "Unsafe partial network group"):
             migration.selection(fleet)
 
+    def test_stopped_unselected_network_client_blocks(self):
+        fleet = self.fleet()
+        fleet["stray"] = make_container(
+            "stray", running=False, labels=compose_labels(),
+            network="container:" + fleet["app00"]["Id"])
+        with self.assertRaisesRegex(migration.Stop, "Unsafe partial network group"):
+            migration.selection(fleet)
+
+    def test_dependency_label_cannot_hide_network_parent(self):
+        fleet = self.fleet()
+        fleet["transmission"]["Config"]["Labels"][
+            "com.docker.compose.depends_on"] = "unrelated:service_started:false"
+        with self.assertRaisesRegex(migration.Stop, "omits network parent"):
+            migration.selection(fleet)
+        fleet = self.fleet()
+        fleet["transmission"]["Config"]["Labels"][
+            "com.docker.compose.depends_on"] = "gluetun:service_started:false"
+        self.assertEqual(len(migration.selection(fleet)), 24)
+        fleet["transmission"]["Config"]["Labels"][
+            "com.centurylinklabs.watchtower.depends-on"] = "unrelated"
+        with self.assertRaisesRegex(migration.Stop, "omits network parent"):
+            migration.selection(fleet)
+
     def test_explicit_legacy_watchtower_optout_blocks(self):
         fleet = self.fleet()
         fleet["app00"]["Config"]["Labels"][
@@ -110,12 +133,15 @@ class MigrationTests(unittest.TestCase):
         }
         smtp = migration.smtp_url(base)
         self.assertIn("encryption=ExplicitTLS", smtp)
+        self.assertIn("requirestarttls=yes", smtp)
         self.assertIn("usestarttls=yes", smtp)
         self.assertIn("a%26b%3Ac%3Fpw", smtp)
         self.assertIn("one%40example.com%2Ctwo%40example.com", smtp)
         self.assertNotIn(base["password"], smtp)
-        self.assertIn("encryption=ImplicitTLS", migration.smtp_url(
-            base | {"port": 465, "tls": "implicit"}))
+        implicit = migration.smtp_url(
+            base | {"port": 465, "tls": "implicit"})
+        self.assertIn("encryption=ImplicitTLS", implicit)
+        self.assertIn("requirestarttls=no", implicit)
 
     def test_compose_is_strictly_targeted_and_no_deploy_app_changes(self):
         wanted = migration.selection(self.fleet())

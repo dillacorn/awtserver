@@ -11,12 +11,15 @@ A successful install is not proof of successful future unattended upgrades.
 """
 import argparse
 from datetime import datetime
+from email.message import EmailMessage
 import ipaddress
 import json
 import os
 from pathlib import Path
 import re
+import smtplib
 import socket
+import ssl
 import subprocess
 import sys
 import tomllib
@@ -32,6 +35,9 @@ VPN = ("gluetun", "transmission", "mullvad-browser")
 NIGHTLY_COUNT = 21
 TOTAL_COUNT = NIGHTLY_COUNT + len(VPN)
 SELECTOR = "__NO_PRODUCTION_TARGETS_WITHOUT_GUARDED_ENROLLMENT__"
+VERIFY_TIMER = "watchtower-fork-verify.timer"
+VERIFY_SERVICE = "watchtower-fork-verify.service"
+UNITS = Path("/etc/systemd/system")
 
 
 class Stop(RuntimeError):
@@ -302,8 +308,17 @@ def preflight():
          state(old) != "running" and
          old["HostConfig"]["RestartPolicy"]["Name"] == "no",
          "Original Freshdock must remain stopped with restart=no")
-    need(ROOT.is_dir() is False or not any(ROOT.iterdir()),
-         "Existing /docker/watchtower-fork files; refuse overwriting")
+    need(not ROOT.exists(),
+         "Existing /docker/watchtower-fork path; refuse overwriting")
+    need(command("systemctl", "--version", check=False).returncode == 0,
+         "systemd required for unattended post-update verification")
+    need(command("systemd-analyze", "calendar",
+                 "*-*-* 05:00:00 America/New_York",
+                 check=False).returncode == 0,
+         "Installed systemd does not understand the verifier timer")
+    need(not any((UNITS / name).exists() for name in
+                 (VERIFY_TIMER, VERIFY_SERVICE)),
+         "Existing verifier systemd unit; refuse overwriting")
     need(all(not n.endswith("-old") and "-old-" not in n
              for n in fleet if state(fleet[n]) == "running"),
          "A running stale archived container requires review")
@@ -321,6 +336,114 @@ def preflight():
     need(set(targets) <= provenance,
          "Newly selected targets are outside the original authorized allowlist")
     return fleet, targets, mail
+
+
+def smtp_send(cfg, subject, body):
+    """Send only with verified TLS, never reporting credentials on failure."""
+    message = EmailMessage()
+    message["From"] = cfg["from"]
+    message["To"] = ", ".join(cfg["to"])
+    message["Subject"] = subject
+    message.set_content(body)
+    try:
+        context = ssl.create_default_context()
+        if cfg["tls"] == "implicit":
+            client = smtplib.SMTP_SSL(cfg["host"], int(cfg["port"]),
+                                      timeout=30, context=context)
+        else:
+            client = smtplib.SMTP(cfg["host"], int(cfg["port"]), timeout=30)
+        with client:
+            if cfg["tls"] == "starttls":
+                client.ehlo()
+                need(client.has_extn("starttls"),
+                     "SMTP refuses STARTTLS; email not sent")
+                client.starttls(context=context)
+                client.ehlo()
+            client.login(cfg["username"], cfg["password"])
+            client.send_message(message)
+    except (OSError, smtplib.SMTPException, ValueError):
+        raise Stop("Encrypted SMTP delivery failed (details suppressed)") from None
+
+
+def verify_runtime(fleet, manifest):
+    """Read-only validation after unattended updates, independent of status logs."""
+    names = manifest.get("container_names")
+    need(isinstance(names, list) and len(names) == TOTAL_COUNT and
+         len(set(names)) == TOTAL_COUNT and set(VPN) <= set(names),
+         "Private installed Watchtower allowlist invalid")
+    selected = selection(fleet)
+    need(set(selected) == set(names), "Current enrollment differs from installed allowlist")
+    updater = fleet.get("watchtower")
+    need(updater and state(updater) == "running",
+         "Watchtower updater not running")
+    cmd = updater["Config"].get("Cmd") or []
+    need(cmd[:2] == ["--schedule", SCHEDULE] and
+         cmd[-len(names):] == names,
+         "Updater schedule or target list drifted")
+    for name in names:
+        c = fleet[name]
+        need(state(c) == "running", f"{name}: not running after nightly update")
+        health = (c["State"].get("Health") or {}).get("Status")
+        need(health not in ("unhealthy",),
+             f"{name}: unhealthy after nightly update")
+    need("freshdock" in fleet and state(fleet["freshdock"]) != "running" and
+         fleet["freshdock"]["HostConfig"]["RestartPolicy"]["Name"] == "no",
+         "Defective Freshdock is unexpectedly enabled")
+    return names
+
+
+def verify_and_alert(notify):
+    need(ROOT.is_dir(), "No installed Watchtower directory")
+    source = ROOT / "targets.json"
+    need(source.is_file(), "Installed target list unavailable")
+    manifest = json.loads(source.read_text())
+    try:
+        names = verify_runtime(containers(), manifest)
+        print(f"PASS: {len(names)} target containers healthy/running; "
+              "network dependencies and updater verified")
+    except (Stop, KeyError, ValueError, TypeError) as exc:
+        # Errors below contain only container names/configuration descriptors,
+        # never SMTP passwords or Docker inspect environments.
+        reason = str(exc)
+        print(f"FAIL: Watchtower unattended verification: {reason}",
+              file=sys.stderr)
+        if notify:
+            mail = smtp_data(OLD_ROOT / "freshdock.toml")
+            smtp_send(mail, "OMV Watchtower: unattended update needs attention",
+                      "Host: openmediavault\n"
+                      "The nightly Docker updater left an unsafe state:\n"
+                      f"{reason}\n"
+                      "Do not restart the defective Freshdock image. "
+                      "Inspect Docker state before retrying updates.\n")
+            print("PASS: encrypted failure alert delivered", flush=True)
+        raise Stop("Unattended Watchtower verification failed") from None
+
+
+def verifier_units():
+    # The timer does not update containers, only audits and emails on failure.
+    service = """[Unit]
+Description=Check OMV Watchtower containers after nightly updates
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/usr/bin/python3 /docker/watchtower-fork/replace_freshdock.py --verify --notify-on-failure
+"""
+    timer = """[Unit]
+Description=Audit Docker updater following nightly maintenance
+
+[Timer]
+OnCalendar=*-*-* 05:00:00 America/New_York
+Persistent=true
+Unit=watchtower-fork-verify.service
+
+[Install]
+WantedBy=timers.target
+"""
+    return service, timer
 
 
 def safe_write(path, text, mode=0o600):
@@ -344,6 +467,17 @@ def apply(before, targets, mail):
         "schedule": SCHEDULE,
         "container_names": targets
     }, indent=2) + "\n")
+    safe_write(ROOT / "replace_freshdock.py",
+               Path(__file__).read_text(), mode=0o700)
+    service, timer = verifier_units()
+    safe_write(UNITS / VERIFY_SERVICE, service, mode=0o644)
+    safe_write(UNITS / VERIFY_TIMER, timer, mode=0o644)
+    command("systemd-analyze", "verify", str(UNITS / VERIFY_SERVICE),
+            str(UNITS / VERIFY_TIMER))
+    # Verify real SMTP delivery before enabling unattended updates.
+    smtp_send(mail, "OMV Watchtower: verified encrypted notifications",
+              "Encrypted SMTP has been verified for the Watchtower replacement.\n"
+              "Freshdock remains stopped. This is not an application update.\n")
     target_path = ROOT / "compose.yml"
     cp = ["docker", "compose", "-p", "watchtower-fork",
           "--project-directory", str(ROOT), "-f", str(target_path)]
@@ -378,11 +512,18 @@ def apply(before, targets, mail):
                  f"Application unexpectedly changed during install: {name}")
         print("PASS: Watchtower running; 24 exact targets, 02:45 ET cron", flush=True)
         print("PASS: All existing containers unchanged", flush=True)
+        command("systemctl", "daemon-reload")
+        command("systemctl", "enable", "--now", VERIFY_TIMER)
+        need(command("systemctl", "is-enabled", VERIFY_TIMER,
+                     check=False).returncode == 0,
+             "Unattended safety verification timer was not enabled")
+        print("PASS: encrypted mail verified; next-day health alert enabled", flush=True)
         print("NOTE: No application update triggered; live nightly behavior still needs observation")
     except Exception:
         # Prevent an unsuccessful daemon install from ever running unattended.
         docker("update", "--restart=no", "watchtower", check=False)
         docker("stop", "--time", "20", "watchtower", check=False, timeout=35)
+        command("systemctl", "disable", "--now", VERIFY_TIMER, check=False)
         raise
 
 
@@ -390,8 +531,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true",
                         help="install and start new updater after strict preflight")
+    parser.add_argument("--verify", action="store_true",
+                        help="read-only check of an installed updater and its targets")
+    parser.add_argument("--notify-on-failure", action="store_true",
+                        help="send encrypted SMTP alert for a failed --verify")
     args = parser.parse_args()
     try:
+        need(not args.notify_on_failure or args.verify,
+             "--notify-on-failure requires --verify")
+        if args.verify:
+            need(os.geteuid() == 0 and socket.gethostname() == HOST,
+                 "Verifier must run as root on openmediavault")
+            verify_and_alert(args.notify_on_failure)
+            return 0
         before, targets, mail = preflight()
         print(f"PASS: {HOST}; original Freshdock stopped and restart disabled")
         print(f"PASS: {len(targets)} selected services; Gluetun and clients verified")

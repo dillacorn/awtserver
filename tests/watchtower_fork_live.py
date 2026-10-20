@@ -168,6 +168,46 @@ def test_parent(latest):
         print("PASS: parent updated and both dependents reattached", flush=True)
 
 
+def test_automatic_scheduler(latest):
+    print("===== real unattended Watchtower polling of TWO clients =====", flush=True)
+    docker("tag", OLD, MOVING)
+    with TestStack("child") as stack:
+        prior = {n: inspect(n)["Id"] for n in stack.children}
+        original_parent = inspect(stack.parent)["Id"]
+        updater = stack.id + "-scheduler"
+        docker("run", "-d", "--rm", "--name", updater,
+               "-v", "/var/run/docker.sock:/var/run/docker.sock",
+               "-e", "TZ=America/New_York",
+               WATCHTOWER, "--interval", "5", "--no-startup-message",
+               *stack.children, timeout=90)
+        try:
+            deadline = time.monotonic() + 160
+            while time.monotonic() < deadline:
+                time.sleep(3)
+                try:
+                    stack.assert_running()
+                    if (all(inspect(n)["Id"] != prior[n] and
+                            inspect(n)["Image"] == latest for n in stack.children)):
+                        break
+                except RuntimeError:
+                    pass
+            else:
+                raise RuntimeError("Unattended Watchtower scheduler did not "
+                                   "update both network-sharing clients")
+            require(inspect(stack.parent)["Id"] == original_parent,
+                    "Scheduler changed untargeted network parent")
+            print("PASS: automatic polling updated both network-sharing clients",
+                  flush=True)
+        finally:
+            result = docker("logs", "--tail", "45", updater, check=False)
+            print("===== unattended scheduler log =====", flush=True)
+            print(result.stdout[-6500:], flush=True)
+            docker("stop", "--time", "20", updater,
+                   check=False, timeout=45)
+            require(docker("inspect", updater, check=False).returncode != 0,
+                    "Disposable unattended scheduler did not clean up")
+
+
 def main():
     require(os.environ.get("GITHUB_ACTIONS") == "true",
             "Only run in isolated GitHub Actions environment")
@@ -182,6 +222,7 @@ def main():
     try:
         test_child(latest)
         test_parent(latest)
+        test_automatic_scheduler(latest)
     finally:
         # Revert tag only on the disposable CI runner.
         docker("pull", MOVING, timeout=300, check=False)

@@ -23,10 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Python syntax
-        run: python3 -m py_compile migration/debian/inventory.py migration/debian/review.py tests/test_debian_migration_*.py
+        run: python3 -m py_compile migration/debian/inventory.py migration/debian/review.py migration/debian/native_audit.py tests/test_debian_migration_*.py
       - name: Offline privacy and parsing tests
         run: python3 -m unittest discover -s tests -p 'test_debian_migration_*.py' -v
       - name: CLI syntax/help only (NO inventory run)
         run: python3 migration/debian/inventory.py --help
       - name: Review CLI help (NO inventory access)
         run: python3 migration/debian/review.py --help
+      - name: Native audit imported only (NO live host commands)
+        run: python3 -c 'import sys; sys.path.insert(0, "migration/debian"); import native_audit'

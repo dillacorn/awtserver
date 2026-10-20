@@ -9,7 +9,7 @@ on:
   pull_request:
     paths:
       - "migration/debian/**"
-      - "tests/test_debian_migration_inventory.py"
+      - "tests/test_debian_migration_*.py"
       - ".github/workflows/debian-migration-inventory.yml"
   workflow_dispatch:
 

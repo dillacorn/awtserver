@@ -1,0 +1,34 @@
+name: Watchtower fork replacement checks
+
+on:
+  pull_request:
+    paths:
+      - 'docker/watchtower/**'
+      - 'tests/watchtower_fork_*'
+      - '.github/workflows/watchtower-fork-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/watchtower/**'
+      - 'tests/watchtower_fork_*'
+      - '.github/workflows/watchtower-fork-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m py_compile docker/watchtower/*.py tests/watchtower_fork_live.py
+          python3 -m unittest discover -s tests -p 'test_watchtower_fork*.py' -v
+          docker compose -f docker/watchtower/compose.yml config --quiet
+  live-docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Real v1.23.1 child and parent namespace tests
+        run: python3 tests/watchtower_fork_live.py

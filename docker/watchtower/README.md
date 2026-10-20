@@ -79,19 +79,48 @@ but **does not wait for the new parent's Docker health status** before starting
 its children. Its health-waiting rolling restart feature explicitly does not
 support linked containers. Thus namespace reattachment alone **does not
 prove the VPN kill switch is engaged before Transmission/Mullvad Browser starts**.
-The actual Gluetun startup and firewall sequence must be established before
-unattended production VPN-parent updates can be approved.
+A dedicated isolated CI run now exercises **actual Gluetun** (not just an
+Alpine network parent), updating a real Gluetun image from v3.40.4 to
+v3.41.3 while both dependent containers share its namespace. It uses an
+unreachable fake WireGuard endpoint and generated test-only keys.
+Both dependents stayed unable to connect to a public TCP destination before
+and after the parent update. The test runner's ordinary network path was
+confirmed reachable as a positive control. This is evidence for **fail-closed
+behavior when the VPN is down**; it cannot guarantee there is no millisecond
+startup race, nor establish behavior while a real tunnel is connected.
+See the `live-gluetun` job in PR #18 Actions.
 
-The v1.23.1 application-create/start failure path records failures but does
-**not automatically restore the previous application container**. The old
-image remains available when cleanup is disabled, but recovery would require
-an explicit, separately validated procedure. SMTP notification delivery can
-also fail independently, so a log or successful daemon startup is not proof
-an outage will be noticed.
+A disposable CI failure-injection test removed a required **test-only bind
+mount source** immediately before an update. The fork reported
+`failed=1, updated=0` but the original container was already removed.
+**Automatic rollback does not occur.** Old image retention alone does not
+restore the removed container, and recovery requires original Compose/source
+identity and bind mounts. A normal registry lookup failure was independently
+tested and did preserve the original running container.
 
-**Production deployment remains blocked on VPN readiness/egress assurance and
-a failure-response plan**, even if all isolated Docker network tests pass.
-Do not silently drop the VPN trio from the requested 24-target scope.
+To avoid silent unattended failures, the guarded installer now also stages
+a separate root-run **05:00 America/New_York systemd verification timer**
+(`watchtower-fork-verify.timer`). The verifier checks the 24 saved names,
+Freshdock exclusion, Watchtower schedule and allowlist, service state,
+Docker health statuses and current shared-network parent IDs. On error it
+sends an SMTP alert using the original private Freshdock TOML via verified TLS.
+It never restarts or recreates applications. The installer sends a real
+encrypted setup email before starting Watchtower. SMTP delivery failures
+block installation, and inability to enable the verifier timer stops the
+new updater. A verifier alert is **detection, not rollback**; the original
+Compose files and volumes must remain available for authorized recovery.
+
+Watchtower itself reads its Shoutrrr SMTP URL from the private file, not
+from environment credentials. The disposable Docker notification test
+verified the file-reading path, not production SMTP delivery.
+
+**Production deployment remains contingent on real OMV inventory and
+a controlled SMTP/health preflight.** The isolated real Gluetun test proves
+fail-closed behavior only for a disconnected fake VPN; do not confuse that
+with successful authenticated tunnel recovery or fully automatic rollback.
+Keep all three VPN containers in the 24-target allowlist. If actual OMV
+Compose/network settings differ from the tested model, or firewall
+preflight rejects any broad exception, stop instead of relaxing the test.
 An alternative to evaluate if the fork cannot provide this guarantee is a
 health-gated coordinated Compose update for the complete VPN group, or a
 tested change to Watchtower's dependency-restart lifecycle. Either approach
@@ -109,13 +138,25 @@ review, use a *pinned SHA* from this PR, never an unreviewed floating URL.
 2. Run `python3 /path/to/replace_freshdock.py` for a read-only check.
 3. Only after it reports an exact list of 24 targets and current healthy VPN
    namespaces, run `python3 /path/to/replace_freshdock.py --apply`.
-4. The installer stages files only under `/docker/watchtower-fork`, pulls
-   pinned Watchtower v1.23.1, starts its daemon, and verifies all original
-   container IDs and states were left unchanged. On a failed installation,
-   it disables/stops the new Watchtower daemon; Freshdock remains stopped.
-5. Review the new Watchtower logs, confirm SMTP delivery using a controlled
-   event, and verify the *first real scheduled update* before calling the
-   migration complete.
+4. The installer stages protected configuration under
+   `/docker/watchtower-fork` and creates exactly two new systemd unit
+   files at `/etc/systemd/system/watchtower-fork-verify.{service,timer}`.
+   No existing units may be overwritten. It validates calendar syntax,
+   sends an encrypted SMTP **setup test email** using the original private
+   Freshdock credentials, pulls Watchtower v1.23.1, starts only the updater,
+   and verifies all original container IDs and states are unchanged.
+   It enables the 05:00 failure-alert timer after verifying the updater.
+   On a failed new updater installation it disables/stops that updater
+   and disables the new timer; Freshdock remains stopped. Newly staged
+   files are retained for inspection, rather than silently deleted.
+5. After installation, run
+   `python3 /docker/watchtower-fork/replace_freshdock.py --verify`
+   to inspect current 24-target state without sending mail.
+   Review both the real setup email and Watchtower Shoutrrr delivery.
+   Confirm the first 02:45 scheduled update and 05:00 verifier run
+   before calling the migration complete. The verified setup email uses
+   Python's TLS SMTP path; it is not itself proof the separate Shoutrrr
+   notifier delivered a notification.
 
 The public `compose.yml` in this directory is **documentation only** and
 contains a deliberately unmatchable sentinel positional target. Do not
@@ -139,6 +180,12 @@ CI: `.github/workflows/watchtower-fork-tests.yml`
   `network_mode: service:parent` app, with untouched parent/sibling
 - Real parent update with two network-sharing dependent applications,
   all verified running and attached to the updated parent
+- Real Gluetun v3.40.4 -> v3.41.3 update through an invalid test WireGuard
+  tunnel, with both dependents verified isolated from a reachable public
+  destination and reattached to the replacement parent
+- Disposable mount-source disappearance test confirming fork logs failed
+  recreation but does not perform automatic application rollback
+- Offline unit checks for 05:00 verifier behavior and encrypted failure mail
 - Real always-running Watchtower daemon with short polling interval
   automatically updates two selected network-sharing applications, preserves
   their parent and exits cleanly on disposal. **PASS**:

@@ -328,8 +328,16 @@ def test_automatic_scheduler(latest):
             result = docker("logs", "--tail", "45", updater, check=False)
             print("===== unattended scheduler log =====", flush=True)
             print(result.stdout[-6500:], flush=True)
-            docker("stop", "--time", "20", updater,
-                   check=False, timeout=45)
+            stop = docker("stop", "--time", "20", updater,
+                          check=False, timeout=45)
+            require(stop.returncode == 0,
+                    "Disposable unattended scheduler did not stop")
+            # Docker --rm removal may complete after docker stop returns.
+            # Wait for actual disposal rather than assuming synchronous rm.
+            disposal_deadline = time.monotonic() + 20
+            while (docker("inspect", updater, check=False).returncode == 0
+                   and time.monotonic() < disposal_deadline):
+                time.sleep(0.5)
             require(docker("inspect", updater, check=False).returncode != 0,
                     "Disposable unattended scheduler did not clean up")
 

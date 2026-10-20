@@ -1,0 +1,144 @@
+"""Offline safety checks for Freshdock -> maintained Watchtower installation."""
+import json
+from pathlib import Path
+import sys
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "docker/watchtower"))
+import replace_freshdock as migration
+
+
+def make_container(name, running=True, labels=None, network="bridge",
+                   identity=None, health=None):
+    identity = identity or name + "0123456789abcdef"
+    return {
+        "Id": identity,
+        "Name": "/" + name,
+        "State": {"Status": "running" if running else "exited",
+                  "Paused": False,
+                  "Health": {"Status": health} if health else {}},
+        "Config": {"Image": "busybox:latest", "Labels": labels or {}},
+        "HostConfig": {"NetworkMode": network,
+                       "RestartPolicy": {"Name": "no"}},
+    }
+
+
+def compose_labels():
+    return {
+        "com.docker.compose.project": "apps",
+        "com.docker.compose.service": "app",
+    }
+
+
+class MigrationTests(unittest.TestCase):
+    def fleet(self):
+        labels = compose_labels() | {
+            "freshdock.enable": "true",
+            "freshdock.mode": "nightly",
+            "freshdock.schedule": migration.MODE_CRON,
+        }
+        fleet = {f"app{i:02d}": make_container(
+            f"app{i:02d}", labels=labels
+        ) for i in range(21)}
+        vpn = compose_labels()
+        gluetun = make_container("gluetun", labels=vpn, health="healthy")
+        fleet["gluetun"] = gluetun
+        for name in ("transmission", "mullvad-browser"):
+            fleet[name] = make_container(
+                name, labels=vpn,
+                network="container:" + gluetun["Id"])
+        return fleet
+
+    def test_allowlist_is_exactly_24(self):
+        fleet = self.fleet()
+        targets = migration.selection(fleet)
+        self.assertEqual(len(targets), 24)
+        self.assertIn("gluetun", targets)
+        self.assertIn("transmission", targets)
+        self.assertIn("mullvad-browser", targets)
+        self.assertNotIn("freshdock", targets)
+
+    def test_ineligible_network_or_unreviewed_client_blocks(self):
+        fleet = self.fleet()
+        fleet["transmission"]["HostConfig"]["NetworkMode"] = "bridge"
+        with self.assertRaisesRegex(migration.Stop, "CURRENT Gluetun"):
+            migration.selection(fleet)
+        fleet = self.fleet()
+        fleet["unreviewed"] = make_container(
+            "unreviewed", labels=compose_labels(),
+            network="container:" + fleet["gluetun"]["Id"])
+        with self.assertRaisesRegex(migration.Stop, "Unreviewed"):
+            migration.selection(fleet)
+
+    def test_stopped_freshdock_target_count_blocks(self):
+        fleet = self.fleet()
+        fleet["app00"]["State"]["Status"] = "exited"
+        with self.assertRaisesRegex(migration.Stop, "count changed"):
+            migration.selection(fleet)
+
+    def test_schedule_drift_blocks(self):
+        fleet = self.fleet()
+        fleet["app00"]["Config"]["Labels"]["freshdock.schedule"] = "wrong"
+        with self.assertRaisesRegex(migration.Stop, "schedule"):
+            migration.selection(fleet)
+
+    def test_shoutrrr_tls_and_escapes(self):
+        base = {
+            "host": "smtp.example.org",
+            "port": 587,
+            "username": "alice@example.com",
+            "password": "a&b:c?pw",
+            "from": "sender@example.com",
+            "to": ["one@example.com", "two@example.com"],
+            "tls": "starttls",
+        }
+        smtp = migration.smtp_url(base)
+        self.assertIn("encryption=ExplicitTLS", smtp)
+        self.assertIn("usestarttls=yes", smtp)
+        self.assertIn("a%26b%3Ac%3Fpw", smtp)
+        self.assertIn("one%40example.com%2Ctwo%40example.com", smtp)
+        self.assertNotIn(base["password"], smtp)
+        self.assertIn("encryption=ImplicitTLS", migration.smtp_url(
+            base | {"port": 465, "tls": "implicit"}))
+
+    def test_compose_is_strictly_targeted_and_no_deploy_app_changes(self):
+        wanted = migration.selection(self.fleet())
+        obj = migration.compose(wanted)
+        svc = obj["services"]["watchtower"]
+        self.assertEqual(svc["image"], migration.VERSION)
+        self.assertEqual(svc["command"][:2],
+                         ["--schedule", "0 45 2 * * *"])
+        self.assertEqual(svc["command"][-24:], list(wanted))
+        self.assertEqual(len(svc["command"]), 27)
+        self.assertEqual(svc["environment"]["WATCHTOWER_NOTIFICATION_URL"],
+                         "/run/secrets/notification_url")
+        self.assertIn(
+            "./notification_url:/run/secrets/notification_url:ro",
+            svc["volumes"],
+        )
+        self.assertNotIn("app00", obj["services"])
+        self.assertNotIn("freshdock", obj["services"])
+        self.assertNotIn("password", json.dumps(obj).lower())
+
+    def test_read_only_default_does_not_call_apply(self):
+        with patch.object(migration, "preflight",
+                          return_value=({}, tuple(
+                              [f"app{i}" for i in range(21)] +
+                              list(migration.VPN)),
+                              {"password": "x"})), \
+             patch.object(migration, "apply") as mutate, \
+             patch("sys.argv", ["replace_freshdock.py"]):
+            self.assertEqual(migration.main(), 0)
+            mutate.assert_not_called()
+
+    def test_stage_writes_only_new_root(self):
+        source = Path(migration.__file__).read_text()
+        for name in ("docker compose down", "docker rm -f",
+                     "docker volume rm", "docker prune",
+                     "docker compose restart"):
+            self.assertNotIn(name, source)
+
+
+if __name__ == "__main__":
+    unittest.main()

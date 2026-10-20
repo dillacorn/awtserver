@@ -1,0 +1,45 @@
+name: Watchtower fork replacement checks
+
+on:
+  pull_request:
+    paths:
+      - 'docker/watchtower/**'
+      - 'tests/watchtower_fork_*'
+      - 'tests/test_watchtower_fork_*'
+      - '.github/workflows/watchtower-fork-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/watchtower/**'
+      - 'tests/watchtower_fork_*'
+      - 'tests/test_watchtower_fork_*'
+      - '.github/workflows/watchtower-fork-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m py_compile docker/watchtower/*.py tests/watchtower_fork_*.py
+          python3 -m unittest discover -s tests -p 'test_watchtower*.py' -v
+          docker compose -f docker/watchtower/compose.yml config --quiet
+          systemd-analyze calendar '*-*-* 05:00:00 America/New_York'
+  live-docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Real v1.23.1 child and parent namespace tests
+        run: python3 tests/watchtower_fork_live.py
+
+  live-gluetun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Real Gluetun no-tunnel firewall and dependency update
+        run: python3 tests/watchtower_fork_gluetun_live.py

@@ -15,7 +15,7 @@ COMPOSE_DIRS=(
   "/docker/freshrss"
   "/docker/flame"
   "/docker/diun"
-  "/docker/freshdock"
+  "/docker/watchtower-fork"
   "/docker/calibre"
   "/docker/karakeep"
   "/docker/privacy"

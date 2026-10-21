@@ -1,6 +1,6 @@
 # Pi-hole agent instructions
 
-Read `README.md`, `SETUP.md`, and `NETWORKING.md` before changing anything in this directory.
+Read `README.md`, `OPERATIONS.md`, `SETUP.md`, and `NETWORKING.md` before changing anything in this directory.
 
 ## Core rule
 

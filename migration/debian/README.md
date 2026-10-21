@@ -14,14 +14,14 @@ support and packages when the actual SSD replacement occurs. No desktop
 environment is required. A web UI is optional and subordinate to plain files
 and systemd, not a second source of truth.
 
-## Long-term project direction (working title: awtserver)
+## Long-term project direction: awtserver
 
 The planned end state is not just a one-time OMV-to-Debian reinstall. It is a
 reproducible, **SSH/CLI-first Debian server management environment**, conceptually
-similar to Awtarchy for Arch desktops. `awtserver` is only a candidate name;
-keep `omv-remote-dots`, its paths and current OMV workflows unchanged until a
-complete, validated migration and a separately authorized repository rename.
-There is no target date.
+similar to Awtarchy for Arch desktops. The repository is now named `awtserver`,
+but the current server still runs OpenMediaVault. The repository rename does
+not authorize changes to the server, installed paths, Compose sources, or
+existing update workflows. No host cutover date is set.
 
 - **Feature parity by actual use:** Preserve the OMV capabilities the user
   depends on: disk/filesystem mounts, mergerfs, SnapRAID, Docker/Compose,

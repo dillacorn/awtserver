@@ -14,6 +14,38 @@ support and packages when the actual SSD replacement occurs. No desktop
 environment is required. A web UI is optional and subordinate to plain files
 and systemd, not a second source of truth.
 
+## Long-term project direction: awtserver
+
+The planned end state is not just a one-time OMV-to-Debian reinstall. It is a
+reproducible, **SSH/CLI-first Debian server management environment**, conceptually
+similar to Awtarchy for Arch desktops. The repository is now named `awtserver`,
+but the current server still runs OpenMediaVault. The repository rename does
+not authorize changes to the server, installed paths, Compose sources, or
+existing update workflows. No host cutover date is set.
+
+- **Feature parity by actual use:** Preserve the OMV capabilities the user
+  depends on: disk/filesystem mounts, mergerfs, SnapRAID, Docker/Compose,
+  network and DNS, Tailscale, FTP, SSH/Fail2ban, UPS, SMART/alerts, scheduling,
+  backups, permissions and recovery. Preserve optional functionality such as
+  Samba as an opt-in profile, not a mandatory running service. Do not implement
+  unused OMV features solely for completeness.
+- **Native, inspectable ownership:** Prefer Debian packages, systemd, Compose
+  and plain files; Git stores shareable definitions, never live secrets.
+  No web interface or configuration database should become a second source
+  of truth. A small optional TUI or status web view may be considered later,
+  but must not be required for headless operation.
+- **Reproducible lifecycle:** Eventually provide modular, independently usable
+  setup/maintenance helpers, idempotent operations where practical, read-only
+  inspection and dry-run defaults, preflight checks, backup/restore guidance
+  and verifiable post-change health checks. Protect existing disks and data.
+- **Evidence-gated adoption:** Use the [restore manifest](restore-manifest.md)
+  and live inventory to determine exactly which OMV behaviors must be
+  reproduced. Do not claim feature parity from repository examples or static
+  tests alone. Prove it on a separate Debian environment before host cutover.
+
+This direction changes **planning only**, not the present server, release
+model, migration gates or service selections below.
+
 ## Confirmed future Debian preferences
 
 User-confirmed October 20, 2026:

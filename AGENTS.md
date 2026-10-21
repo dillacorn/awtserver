@@ -15,11 +15,32 @@ Applies to this repository, including `docker/` and OMV service documentation.
 ## User-facing documentation
 
 - Keep README files short and navigable: purpose, quick start or key facts, essential caveats, and links to deeper instructions. Do not turn a README into a debug transcript or accumulated incident log.
+- **Shorten presentation, not retained context.** Never discard troubleshooting evidence, safety checks, compatibility boundaries, rollback instructions, service dependencies, or implementation decisions just to make a README smaller. Preserve substantive material in relevant reference documents and link it from the README and the context map below.
+- Before modifying any service or writing advice about it, read the applicable `AGENTS.md` files and the relevant full operational references below. A short README is an index, **not** a complete source of technical context.
+- When behavior, assumptions, or deployment facts change, update the detailed operational reference alongside the concise README. Mark old host observations as dated history; do not mistake them for current runtime evidence.
 - Put deployment steps, safeguards, rollback procedures, and historical host evidence in purpose-specific reference files such as `OPERATIONS.md`, `SETUP.md`, and `NETWORKING.md`. Keep them complete and inspectable; do not discard critical constraints simply to reduce README length.
 - Keep `AGENTS.md` for contributor/agent operational rules, not as a substitute for user-facing instructions.
 - Present Debian Stable as the project's focused operating environment. Avoid claiming a validated production-ready installer where only examples or components exist.
 - Historical OMV-specific scripts and docs remain constrained to their proven host. Do not retarget them to vanilla Debian by changing prose or assuming compatibility.
 
+## Technical context map
+
+The full operational guides remain available even when a service README is short. **Read the relevant sources before diagnosis, scripts, Compose edits, migrations, or GitHub issue work.** Existing deployment snapshots and legacy commands are not proof of present host state.
+
+| Topic | Detailed sources |
+| --- | --- |
+| **Debian build / server recovery** | [Inventory and historical transition plan](migration/debian/OPERATIONS.md), [restore requirements](migration/debian/restore-manifest.md), [host findings](migration/debian/host-findings-2026-10-20.md) |
+| **Docker services** | [Service index](docker/README.md), [historical Docker commands](docker/LEGACY-NOTES.md); inspect each service's Compose files and host runtime |
+| **Pi-hole, DNS and pihm** | [Local instructions](docker/pihole/AGENTS.md), [full operational notes](docker/pihole/OPERATIONS.md), [setup](docker/pihole/SETUP.md), [networking](docker/pihole/NETWORKING.md), [DNS recovery](docker/pihole/DNS-RECOVERY.md) |
+| **Seerr / Jellyseerr** | [Migration guards, historical paths and rollback](docker/seerr/OPERATIONS.md) |
+| **Watchtower** | [Updater scope, verifier, tests and recovery limitations](docker/watchtower/OPERATIONS.md) |
+| **Docker Engine APT recovery** | [APT hook, install and failure-mode details](docker/engine-upgrade-recovery/OPERATIONS.md) |
+| **Tailscale certificates** | [Renewal and certificate-mount procedures](docker/tailscale-certs/OPERATIONS.md) |
+| **Navidrome** | [Storage paths, access and network overlays](docker/navidrome/OPERATIONS.md) |
+| **Arachnidium** | [Proxy network, profiles and CA security](docker/arachnidium/OPERATIONS.md) |
+
+- Files under `migration/debian/` and some service references describe the **existing OMV host** for evidence/recovery. Preserve them as history and do not treat OMV-specific scripts, old repository URLs, or `/docker/...` paths as portable Debian instructions.
+- Prefer the relevant service's `OPERATIONS.md` for detailed procedures and `AGENTS.md` for constraints. Do not duplicate long procedures into top-level READMEs or delete the only copy of a safeguard.
 ## Merge and release authorization
 
 Operate autonomously within the user's approved scope; do not add needless approval checkpoints.

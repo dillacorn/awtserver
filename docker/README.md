@@ -1,123 +1,23 @@
-# Docker Container Management Guide
+# Docker services
 
-## 🚀 Recommendations
+Compose templates, helper scripts and short service guides for a Debian Stable server.
 
-### System Setup
-- **Operating System**: 
-  - ✅ Preferred: Native Linux
-  - Windows: Use WSL2 (Windows Subsystem for Linux)
-  - Alternative: VirtualBox VM
+## Browse services
 
-### Storage Configuration
-- **Performance**: 
-  - 🚀 Always run containers on SSD
-  - 💾 Reduces HDD wear and improves performance
+| Service | Documentation |
+| --- | --- |
+| **DNS and profiles** | [Pi-hole](pihole/README.md), [Arachnidium](arachnidium/README.md) |
+| **Media** | [Jellyfin](jellyfin/README.md), [Seerr](seerr/README.md), [Navidrome](navidrome/README.md) |
+| **Management** | [Dockge](dockge/README.md), [Watchtower](watchtower/README.md) |
+| **Maintenance** | [Docker Engine recovery](engine-upgrade-recovery/README.md), [Tailscale certificates](tailscale-certs/README.md) |
 
-### Backup Strategy
-- **3-2-1 Backup Rule**:
-  1. Primary: Active `docker` folder on SSD
-  2. Secondary: Backup to HDD (same machine)
-  3. Tertiary: Backup to external drive/NAS
+Other service templates are available in their respective subdirectories.
 
-## 🔄 Backup Commands
+## Safe starting point
 
-### Rsync Options
-# Safe sync (preserves destination files)
 ```bash
-rsync -avh --progress /ssd/docker/ /hdd/docker_backup/
+docker compose ls
+docker ps --format 'table {{.Names}}\t{{.Status}}'
 ```
 
-# Mirror sync (exact copy with deletion)
-```bash
-rsync -avh --progress --delete --info=progress2 /ssd/docker/ /hdd/docker_backup/
-```
-
-## 🐳 Docker Files
-
-| File                        | Purpose                          |
-|-----------------------------|----------------------------------|
-| `docker-compose_example.yml`| Template (requires editing)      |
-| `docker-compose.yml`        | Production-ready (plug & play)   |
-
-## 🛠️ Container Management
-
-### Basic Commands
-# Start container
-```bash
-docker compose up -d
-```
-
-# Stop specific container
-```bash
-docker stop <container_name>
-```
-
-# Stop container (from compose dir)
-```bash
-docker compose down
-```
-
-## Container Monitoring
-
-# View running containers
-```bash
-docker ps
-```
-
-# View all containers (including stopped)
-```bash
-docker ps -a
-```
-
-# View container logs
-```bash
-docker logs <container_name>
-```
-
-## 🔧 Maintenance Commands
-
-# Update container images
-```bash
-docker compose pull
-```
-
-## Volume Management
-
-# List volumes
-```bash
-docker volume ls
-```
-
-# Inspect volume
-```bash
-docker volume inspect <volume_name>
-```
-
-# Remove unused volumes (CAUTION!)
-```bash
-docker volume prune
-```
-
-## Cleanup
-
-# Remove specific container
-```bash
-docker rm <container_name>
-```
-
-❓ Troubleshooting
-
-- Always check container names in `docker-compose.yml`
-
-- For volume operations, verify no containers are using them first
-
-- When in doubt: `docker logs <container_name>`
-
-🍀 Good Luck!
-Remember:
-
-Regular backups prevent headaches
-
-SSD extends hardware life
-
-Proper shutdown prevents corruption
+Inspect the *running* Compose project, overrides, mounts, volumes and container identities before applying a template. Never use cleanup or `docker compose down` against a production stack whose persistent state and dependencies have not been verified.

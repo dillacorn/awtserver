@@ -1,50 +1,47 @@
 # `awtserver`
 
-#### [Debian migration plan](migration/debian/README.md) · [Restore manifest](migration/debian/restore-manifest.md) · [Docker service notes](docker/pihole/README.md)
+#### [Debian migration plan](migration/debian/README.md) · [Restore manifest](migration/debian/restore-manifest.md) · [Pi-hole & DNS](docker/pihole/README.md)
 
 ---
 
-**awtserver** is not a Linux distribution. It is a planned SSH/CLI-first server management environment for minimal Debian Stable, following the same base-OS-plus-managed-configuration approach as [Awtarchy](https://github.com/dillacorn/awtarchy).
+**awtserver** is an SSH/CLI-first collection of server configuration, scripts, and documentation intended for **OpenMediaVault (OMV)** and **vanilla Debian Stable**. It is not a Linux distribution or a replacement for either operating system.
 
-**Current status:** This repository still supports an existing OpenMediaVault server with scripts, service notes, and Docker/Compose examples. The live host has not migrated to vanilla Debian. No cutover date or production-ready installer is claimed.
+**Current status:** The repository documents and maintains an existing OMV server. A standalone Debian setup is planned, but there is no production-ready installer or verified migration path yet.
 
-## Install model
+## Two supported paths (one current, one planned)
 
-1. **Today:** Keep the working OMV server running and maintain its existing services.
-2. **Future:** Install minimal Debian on a separately verified OS SSD, then restore the OMV features actually used, rather than reproducing the entire OMV web interface.
-3. **After validation:** Manage the server with SSH, native Debian utilities, systemd, Docker Compose, and reviewable scripts.
+- **OpenMediaVault — current:** Keep OMV's storage management and web interface, with awtserver providing additional service configuration and maintenance helpers.
+- **Vanilla Debian — planned:** Run the same needed services using native Debian tools, systemd, and Docker Compose, without requiring OMV. Migration is optional, not a prerequisite.
 
-The [migration plan](migration/debian/README.md) documents the inventory, prerequisites, backup and rollback safeguards, and staged verification needed before cutover.
+Both paths aim to share reusable configuration and scripts where practical, without interfering with the host's existing management tools.
 
-## Why this approach
+## What it covers
 
-- **Direct control:** Plain configuration files and native Debian services instead of an OMV-specific management database.
-- **CLI-first:** SSH and TTY administration; optional web or terminal interfaces must not become required dependencies.
-- **Reproducible:** Version-controlled configuration and individually usable setup and maintenance helpers.
-- **Conservative storage handling:** Verify mounts, backups, parity, ownership, and restore behavior before any migration.
-
-## Server overview
-
-These are **current services and future feature-parity goals**, not a claim that an awtserver installer already provisions them.
+These are current OMV services and future Debian feature goals, **not** a claim that one installer provisions everything.
 
 | Area | Components |
 | --- | --- |
-| **Foundation** | [Debian Stable](https://www.debian.org/releases/stable/) (future); OpenMediaVault on Debian (current) |
-| **Administration** | SSH, TTY, systemd, optional standalone management helpers |
+| **Administration** | SSH, TTY, systemd, optional management helpers |
 | **Storage** | ext4, [SnapRAID](https://www.snapraid.it/), [mergerfs](https://github.com/trapexit/mergerfs) |
 | **Applications** | Docker Engine, Docker Compose, optional Dockge |
-| **Network and DNS** | Tailscale, Pi-hole, Quad9 upstream DNS, Gluetun isolation |
+| **Network and DNS** | Tailscale, Pi-hole, Quad9 upstream DNS, Gluetun |
 | **Security** | Fail2ban, firewall, service-specific access controls |
-| **Reliability** | SMART monitoring, APC UPS, scheduled jobs, alerts, backup and restore |
-| **Optional** | Samba/SMB when explicitly enabled |
+| **Reliability** | SMART monitoring, APC UPS, scheduled jobs, alerts, backups and restore |
+| **Optional** | Samba/SMB when enabled |
+
+## Approach
+
+- **CLI-first, not CLI-only:** Prefer inspectable files and SSH tools; keep OMV's web interface available on OMV systems.
+- **Modular:** Share setup and maintenance helpers without requiring a new control panel.
+- **Safe changes:** Verify disks, mounts, permissions, parity, backups, and rollback procedures before migration or recreation.
 
 ## Documentation
 
-- **Migration inventory, implementation stages, and safety requirements:** [Debian migration](migration/debian/README.md)
-- **Service requirements and acceptance checks:** [Restore manifest](migration/debian/restore-manifest.md)
-- **Pi-hole and DNS profile management:** [Pi-hole](docker/pihole/README.md)
-- **Automatic Docker updates:** [Watchtower](docker/watchtower/README.md)
-- **Media requests:** [Seerr](docker/seerr/README.md)
+- [Debian migration plan](migration/debian/README.md): inventory, safeguards, and staged validation for a possible move away from OMV
+- [Restore manifest](migration/debian/restore-manifest.md): service requirements and acceptance checks
+- [Pi-hole & DNS](docker/pihole/README.md): DNS and profile management
+- [Watchtower](docker/watchtower/README.md): automatic Docker updates
+- [Seerr](docker/seerr/README.md): media requests
 
 ## External references
 

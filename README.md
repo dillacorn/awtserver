@@ -8,7 +8,7 @@
 
 **Current status:** The repository documents and maintains an existing OMV server. A standalone Debian setup is planned, but there is no production-ready installer or verified migration path yet.
 
-## Two supported paths (one current, one planned)
+## Platforms
 
 - **OpenMediaVault — current:** Keep OMV's storage management and web interface, with awtserver providing additional service configuration and maintenance helpers.
 - **Vanilla Debian — planned:** Run the same needed services using native Debian tools, systemd, and Docker Compose, without requiring OMV. Migration is optional, not a prerequisite.

@@ -1,16 +1,24 @@
-# Repository instructions for omv-remote-dots
+# Repository instructions for awtserver
 
 Applies to this repository, including `docker/` and OMV service documentation.
 
 ## Project and operational boundaries
 
-- This repository contains OpenMediaVault host notes, scripts, and Docker/Compose examples. It is **not** a complete, authoritative image of a live OMV server.
+- This repository focuses on a Debian Stable server managed through SSH/CLI, native services, and Docker Compose. It also retains notes and scripts for the existing OMV host. The repository is **not** a complete, authoritative image of any live server.
 - Before any host-specific diagnosis or suggested change, establish the **current host**, actual container names, Compose project/service names, and relevant live paths from that host. Do not infer them from old output, another server, or the example repository.
 - Treat source files, example Compose configuration, active Compose files, container state, and host files as distinct. A commit to `main` does **not** prove that the running server has changed, and applying a host change is a separate authorization.
 - Preserve persistent Docker volumes, databases, configuration, secrets, filesystem ownership, networking, DNS, and backup data. Never replace, prune, reset, migrate, or delete live data based only on example paths; require appropriate host evidence, safety checks, and explicit permission for destructive operations.
 - `docker/pihole/` documents Pi-hole, Quad9/DNS transport, Tailscale/DNS routing, profile management (`pihm`), and optional Arachnidium integrations. Preserve live DNS availability and profile separation; never assume container, network, or configuration names without checking.
 - Updates sourced from `main` may be fetched by host-side installation/update helpers even without a GitHub Release. Document this distinction; do not assume adding a release tag alone deploys any code.
 - Do not commit credentials, environment secrets, Tailscale auth data, private keys, passwords, database copies, or sensitive device-specific output.
+
+## User-facing documentation
+
+- Keep README files short and navigable: purpose, quick start or key facts, essential caveats, and links to deeper instructions. Do not turn a README into a debug transcript or accumulated incident log.
+- Put deployment steps, safeguards, rollback procedures, and historical host evidence in purpose-specific reference files such as `OPERATIONS.md`, `SETUP.md`, and `NETWORKING.md`. Keep them complete and inspectable; do not discard critical constraints simply to reduce README length.
+- Keep `AGENTS.md` for contributor/agent operational rules, not as a substitute for user-facing instructions.
+- Present Debian Stable as the project's focused operating environment. Avoid claiming a validated production-ready installer where only examples or components exist.
+- Historical OMV-specific scripts and docs remain constrained to their proven host. Do not retarget them to vanilla Debian by changing prose or assuming compatibility.
 
 ## Merge and release authorization
 

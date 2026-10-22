@@ -31,6 +31,8 @@ This is the development coverage checklist, not a claim that a complete installe
 - [ ] VM staging restore **runtime test**: prove encrypted repository recovery succeeds without touching running root
 - [ ] 80% alert schedule, deduplication, clear/recovery notification, SMTP transport verification and test mail delivery
 - [ ] Identify real NAS AIO schedule/settings, script owner and USB backup mount by sanitized read-only live probe
+- [x] Dated October 22 OMV capability report: 7 jobs (3 active), 8 relevant timers, Docker CE, Borg/Timeshift/rsync, 1 unmounted USB disk
+- [ ] Discover exact enabled job categories/times; separate active backup schedules and verify Restic/Borg/Timeshift behavior rather than assuming any installed package is used
 - [ ] All selected Docker services from the current OMV inventory, validated independently
 
 ## C. Scheduling, CLI and terminal UI

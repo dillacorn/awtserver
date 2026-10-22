@@ -83,7 +83,7 @@ Current limitations: five numeric cron fields, non-root job execution, strict sc
 
 ## Read-only TUI preview
 
-With an interactive SSH or local TTY (at least 30 columns wide and 12 lines high):
+With an interactive SSH or local TTY (at least 30 columns wide and 14 lines high):
 
 ```bash
 python3 awtserver_tui.py

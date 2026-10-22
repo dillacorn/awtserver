@@ -178,6 +178,17 @@ def save_jobs(jobs: list[dict], path: Path | None = None) -> None:
 
 def jobs_command(args: argparse.Namespace) -> None:
     jobs = load_jobs()
+    if args.job_action in ("render", "sync"):
+        from awtserver_cron import preview_cron, sync_cron
+        print(preview_cron(jobs), end="")
+        if args.job_action == "sync":
+            if args.apply:
+                apply_guard(args.confirm_vm)
+                changed = sync_cron(jobs)
+                print("Managed cron installed." if changed else "Managed cron unchanged.")
+            else:
+                print("Preview only. Use --apply --confirm-vm on a disposable VM.")
+        return
     if args.job_action == "list":
         print(json.dumps({"jobs": jobs, "awtserver_active_cron_jobs": 0,
                           "note": "Declarative plans only: no cron entries installed"},
@@ -244,6 +255,10 @@ def main(argv: list[str] | None = None) -> int:
     js = sub.add_parser("jobs", help="Manage declarative job plans; never runs cron")
     jsub = js.add_subparsers(dest="job_action", required=True)
     jsub.add_parser("list")
+    jsub.add_parser("render", help="Show proposed cron changes without writing")
+    sync = jsub.add_parser("sync", help="VM-only installation of managed cron file")
+    sync.add_argument("--apply", action="store_true")
+    sync.add_argument("--confirm-vm", action="store_true")
     for action in ("add", "enable", "disable", "remove"):
         cmd = jsub.add_parser(action)
         cmd.add_argument("--name", required=True)

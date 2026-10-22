@@ -8,4 +8,4 @@
 
 **Do not** automatically recreate running applications, prune volumes, remove networks or publish service ports.
 
-Details: [Docker index](../../docker/README.md) · [recovery requirements](../../migration/debian/restore-manifest.md).
+Details: [Docker index](https://github.com/dillacorn/awtserver/blob/main/docker/README.md) · [recovery requirements](https://github.com/dillacorn/awtserver/blob/main/migration/debian/restore-manifest.md).

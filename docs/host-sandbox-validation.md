@@ -18,7 +18,7 @@ The runner:
 - Test writes remain under private temporary paths, not /etc, /opt, /var/lib/awtserver or mounted data volumes.
 - In tests that call VM-protected routines, write authorization is mocked **only in memory** and the destination is a temporary path. The real OMV write gate remains intact.
 - The temporary source checkout is removed by a shell trap; no command is permanently installed.
-- Interactive gdu/ncdu launches are **never executed by the host smoke test** and TUI launch is blocked entirely when run as root.
+- Interactive gdu/ncdu launches are **never executed by the automated host smoke test**. For manual SSH navigation, launch the TUI with AWTSERVER_TUI_TEST_MODE=1; this blocks both disk-browser subprocesses regardless of installed packages. Independently, external disk-tool launch is blocked as root.
 - Test execution is unprivileged. A root-only guard check can also be performed using the non-mutating apply_guard(True) function.
 - A passing test is **not** validation of actual curses rendering in the user's terminal, disk tool interaction, cron activation, email delivery, privileged installation or backup integrity.
 - Tests still perform small amounts of temporary disk I/O. Do not claim an absolute absence of risk for unreviewed code.

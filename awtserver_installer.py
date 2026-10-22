@@ -39,7 +39,7 @@ MARKER = ".awtserver-managed-v1"
 def file_list() -> list[Path]:
     return [Path(p) for p in FILES] + [
         Path("docs/quick") / entry[3] for entry in awtserver_docs.entries()
-    ]
+    ] + [Path("docs/examples/omv-schedules-2026-10-22.json")]
 
 
 def check_source(source: Path = ROOT) -> None:

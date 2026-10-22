@@ -5,22 +5,44 @@ from __future__ import annotations
 import curses
 import json
 import re
+import shutil
+import subprocess
 import sys
 import textwrap
 
 import awtserver
 import awtserver_cron
 import awtserver_docs
+import awtserver_storage
+import awtserver_snapraid
+import awtserver_monitor
 
 # Stable category-first navigation. Only render/read actions exist.
 ROOT_ITEMS = (
-    ("Status", "doctor"),
+    ("Status", "menu:status"),
+    ("Storage", "menu:storage"),
+    ("SnapRAID", "menu:snapraid"),
+    ("Maintenance", "menu:maintenance"),
     ("Packages", "menu:packages"),
-    ("Schedules", "menu:schedules"),
     ("Guides", "menu:guides"),
     ("Quit", "quit"),
 )
 SUBMENU = {
+    "status": (("Host health", "doctor"), ("CPU and memory", "stats"),
+               ("Disk alerts at 80%", "storage:usage")),
+    "storage": (("Disk space", "storage:usage"),
+                ("Drive list", "storage:disks"),
+                ("mergerfs pools", "storage:pools"),
+                ("Available tools", "storage:tools"),
+                ("gdu (no deletion)", "launch:gdu"),
+                ("ncdu (read only)", "launch:ncdu")),
+    "snapraid": (("AIO status and prerequisites", "snapraid:status"),
+                 ("Schedule preview", "snapraid:plan"),
+                 ("Setup instructions", "doc:snapraid")),
+    "maintenance": (("Scheduled jobs", "menu:schedules"),
+                    ("USB backup and recovery", "doc:recovery-usb"),
+                    ("Capacity emails", "doc:alerts"),
+                    ("UPS and SMART", "doc:smart-ups")),
     "packages": (("Package profiles", "profiles"), ("Install plan", "plan")),
     "schedules": (("Saved jobs", "jobs"), ("Cron changes", "cron")),
 }
@@ -53,6 +75,8 @@ def next_selection(index: int, key: int, count: int) -> int:
 
 def get_details(action: str) -> str:
     """Model for read-only views; no commands that change the host."""
+    if action == "stats":
+        return json.dumps(awtserver_monitor.system_stats(), indent=2)
     if action == "doctor":
         return json.dumps(awtserver.doctor_snapshot(), indent=2)
     if action == "profiles":
@@ -66,6 +90,19 @@ def get_details(action: str) -> str:
                           indent=2)
     if action == "cron":
         return awtserver_cron.preview_cron(awtserver.load_jobs())
+    if action == "storage:usage":
+        return awtserver_storage.report_to_text(awtserver_storage.usage_report(80))
+    if action == "storage:disks":
+        return json.dumps(awtserver_storage.block_devices(), indent=2)
+    if action == "storage:pools":
+        return json.dumps(awtserver_storage.pool_report(), indent=2)
+    if action == "storage:tools":
+        return json.dumps(awtserver_storage.tool_catalog(), indent=2)
+    if action == "snapraid:status":
+        return json.dumps({"schedule": awtserver_snapraid.schedule_from_file(),
+                           "warnings": awtserver_snapraid.prerequisites()}, indent=2)
+    if action == "snapraid:plan":
+        return awtserver_snapraid.render_cron(awtserver_snapraid.schedule_from_file())
     if action.startswith("doc:"):
         return awtserver_docs.read_topic(action.split(":", 1)[1])
     raise ValueError("Unknown TUI action")
@@ -98,6 +135,29 @@ def detail_lines(detail: str, columns: int, *, markdown: bool = False) -> list[s
     return result or ["(empty)"]
 
 
+def launch_tool(action: str, screen) -> str:
+    """Explicit terminal-only tool switch, never a command string or shell."""
+    allowed = {
+        "gdu": ["gdu", "--no-delete", "--no-spawn-shell",
+                "--no-view-file", "--no-cross", "/"],
+        "ncdu": ["ncdu", "-rr", "-x", "/"],
+    }
+    if action not in allowed:
+        raise ValueError("Unknown external tool")
+    argv = allowed[action]
+    if not shutil.which(argv[0]):
+        return f"{argv[0]} is not installed. Select the optional tooling package profile."
+    curses.def_prog_mode()
+    curses.endwin()
+    try:
+        result = subprocess.run(argv, check=False)
+        return f"{argv[0]} finished with status {result.returncode}"
+    finally:
+        curses.reset_prog_mode()
+        screen.clear()
+        screen.refresh()
+
+
 def safe_line(screen, row: int, col: int, text: str, width: int,
               attribute: int = 0) -> None:
     height, columns = screen.getmaxyx()
@@ -125,8 +185,8 @@ def run_ui(screen) -> None:
     while True:
         screen.erase()
         height, width = screen.getmaxyx()
-        if height < 12 or width < 30:
-            safe_line(screen, 0, 0, "Resize terminal: 30x12 minimum", width)
+        if height < 14 or width < 30:
+            safe_line(screen, 0, 0, "Resize terminal: 30x14 minimum", width)
             screen.refresh()
             key = screen.getch()
             if key in (ord("q"), 27):
@@ -194,7 +254,10 @@ def run_ui(screen) -> None:
             markdown_detail = action.startswith("doc:")
             scroll = 0
             try:
-                detail = get_details(action)
+                if action.startswith("launch:"):
+                    detail = launch_tool(action.split(":", 1)[1], screen)
+                else:
+                    detail = get_details(action)
             except (ValueError, OSError, KeyError, json.JSONDecodeError) as error:
                 detail = f"Unable to read: {error}"
 

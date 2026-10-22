@@ -44,6 +44,21 @@ class BackupTests(unittest.TestCase):
             self.assertTrue(any("Docker" in x for x in plan["excluded"]))
             called.assert_called_once_with("/usb","UUID")
 
+    def test_restore_stage_is_vm_gated(self):
+        with patch.object(b, "apply_guard", side_effect=ValueError("VM only")):
+            with self.assertRaisesRegex(ValueError, "VM only"):
+                b.restore_stage("/mnt/usb", "UUID", Path("/root/secret"))
+
+    def test_restore_stage_preview_does_not_write(self):
+        with patch.object(b, "backup_target", return_value={"repository":"/usb/restic"}), \
+             patch.object(b, "restore_stage") as restore, \
+             contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(b.main(["restore-stage", "--mount", "/usb",
+                                     "--uuid", "UUID", "--password-file",
+                                     "/root/password"]), 0)
+            self.assertIn("Preview only", out.getvalue())
+            restore.assert_not_called()
+
     def test_preview_never_runs_restic(self):
         with patch.object(b,"backup_target",return_value={"repository":"/usb/restic"}), \
              patch.object(b,"snapshot") as snap, \

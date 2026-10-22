@@ -21,6 +21,19 @@ class Profiles(unittest.TestCase):
         self.assertNotIn("docker.io", awt.packages_for(list(awt.DEFAULT_PROFILES)))
         self.assertIn("samba", awt.packages_for(["sharing"]))
 
+    def test_docker_provider_must_be_explicit(self):
+        self.assertEqual(awt.packages_for(["docker-debian"]),
+                         ["docker-compose", "docker.io"])
+        with self.assertRaisesRegex(ValueError, "Ambiguous Docker profile"):
+            awt.packages_for(["docker"])
+        self.assertNotIn("docker.io", awt.packages_for(["base", "storage"]))
+
+    def test_existing_backup_providers_remain_opt_in(self):
+        self.assertEqual(awt.packages_for(["borg"]), ["borgbackup"])
+        self.assertEqual(awt.packages_for(["timeshift"]), ["timeshift"])
+        self.assertEqual(awt.packages_for(["recovery"]), ["restic"])
+        self.assertNotIn("borgbackup", awt.packages_for(list(awt.DEFAULT_PROFILES)))
+
     def test_unknown_profile_rejected(self):
         with self.assertRaisesRegex(ValueError, "Unknown profile"):
             awt.packages_for(["nonexistent"])

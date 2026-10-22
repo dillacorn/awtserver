@@ -126,7 +126,8 @@ def validate_job(name: str, schedule: str, user: str, script: str) -> dict:
             "user": user, "script": str(path), "enabled": False}
 
 
-def load_jobs(path: Path = JOBS_FILE) -> list[dict]:
+def load_jobs(path: Path | None = None) -> list[dict]:
+    path = path if path is not None else JOBS_FILE
     if not path.exists():
         return []
     if path.is_symlink() or not path.is_file():
@@ -147,8 +148,9 @@ def load_jobs(path: Path = JOBS_FILE) -> list[dict]:
     return data
 
 
-def save_jobs(jobs: list[dict], path: Path = JOBS_FILE) -> None:
+def save_jobs(jobs: list[dict], path: Path | None = None) -> None:
     """Atomic private state write; intentionally does not install cron jobs."""
+    path = path if path is not None else JOBS_FILE
     parent = path.parent
     if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
         raise ValueError("Unsafe state directory")

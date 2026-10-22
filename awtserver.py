@@ -219,7 +219,8 @@ def jobs_command(args: argparse.Namespace) -> None:
         print("Preview only. No files changed; --apply --confirm-vm is VM-only.")
 
 
-def doctor() -> None:
+def doctor_snapshot() -> dict:
+    """Return a read-only host status model shared by CLI and TUI."""
     info = parse_os_release()
     names = ("ssh", "docker", "fail2ban", "smartmontools", "apcupsd", "cron")
     output = {"os": info.get("PRETTY_NAME", "unknown"),
@@ -237,7 +238,11 @@ def doctor() -> None:
             output["services"][name] = cmd.stdout.strip() or "unknown"
         except (FileNotFoundError, subprocess.TimeoutExpired):
             output["services"][name] = "unknown"
-    print(json.dumps(output, indent=2))
+    return output
+
+
+def doctor() -> None:
+    print(json.dumps(doctor_snapshot(), indent=2))
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -53,7 +53,8 @@ This is the development coverage checklist, not a claim that a complete installe
 - [x] Read-only keyboard TUI with Storage/SnapRAID/Maintenance submenus and read-only gdu/ncdu launches
 - [x] Read-only keyboard TUI using the same backend as CLI
 - [x] Executable launcher dispatches CLI, compact TUI and offline categorized guides; VM-only first-install command
-- [ ] Command updater/uninstaller with version detection, safe replacement, explicit rollback and tested ownership
+- [x] Command update/uninstall, version marker, manifest verification, managed-file-only removal and code-only rollback
+- [ ] Actual system-path lifecycle installation/update/uninstall tested on a disposable Debian host and interrupted-upgrade recovery
 - [ ] Interactive profile choices, job configuration/toggles, previews, confirmation and transactions
 - [ ] SSH/TTY visual and input validation: resize, minimal size, keyboard handling, unsupported terminal, interrupted session
 

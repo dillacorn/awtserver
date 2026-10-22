@@ -26,6 +26,7 @@ FILES = (
     "awtserver_tui.py",
     "awtserver_cron.py",
     "awtserver_docs.py",
+    "awtserver_installer.py",
 )
 MARKER = ".awtserver-managed-v1"
 

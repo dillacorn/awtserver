@@ -8,4 +8,4 @@
 
 Enabling desired state is **not** activation. Active cron has no built-in retry, overlap protection or email routing in this prototype.
 
-Details: [CLI and cron safety](../awtserver-cli.md) · [development checklist](../IMPLEMENTATION.md).
+Details: [CLI and cron safety](https://github.com/dillacorn/awtserver/blob/main/docs/awtserver-cli.md) · [development checklist](https://github.com/dillacorn/awtserver/blob/main/docs/IMPLEMENTATION.md).

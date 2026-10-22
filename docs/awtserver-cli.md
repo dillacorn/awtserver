@@ -63,8 +63,8 @@ Actual storage mounts, SnapRAID parity configurations, existing array discovery,
 ## Validate
 
 ```bash
-python3 -m py_compile awtserver.py tests/test_awtserver_cli.py
-python3 -m unittest discover -s tests -p 'test_awtserver_cli.py' -v
+python3 -m py_compile awtserver.py awtserver_cron.py awtserver_tui.py
+python3 -m unittest discover -s tests -p 'test_awtserver*.py' -v
 python3 awtserver.py plan
 ```
 

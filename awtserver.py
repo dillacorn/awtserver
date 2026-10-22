@@ -128,6 +128,8 @@ def validate_job(name: str, schedule: str, user: str, script: str) -> dict:
 
 def load_jobs(path: Path | None = None) -> list[dict]:
     path = path if path is not None else JOBS_FILE
+    if path.parent.is_symlink():
+        raise ValueError("Unsafe jobs state directory")
     if not path.exists():
         return []
     if path.is_symlink() or not path.is_file():
@@ -155,6 +157,9 @@ def save_jobs(jobs: list[dict], path: Path | None = None) -> None:
     if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
         raise ValueError("Unsafe state directory")
     parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = parent.stat()
+    if info.st_mode & 0o077 or (os.geteuid() == 0 and info.st_uid != 0):
+        raise ValueError("Unsafe state directory ownership or permissions")
     if path.is_symlink() or (path.exists() and not path.is_file()):
         raise ValueError("Unsafe jobs state path")
     payload = json.dumps(jobs, indent=2, sort_keys=True) + "\n"
@@ -174,7 +179,7 @@ def save_jobs(jobs: list[dict], path: Path | None = None) -> None:
 def jobs_command(args: argparse.Namespace) -> None:
     jobs = load_jobs()
     if args.job_action == "list":
-        print(json.dumps({"jobs": jobs, "active_cron_jobs": 0,
+        print(json.dumps({"jobs": jobs, "awtserver_active_cron_jobs": 0,
                           "note": "Declarative plans only: no cron entries installed"},
                          indent=2))
         return

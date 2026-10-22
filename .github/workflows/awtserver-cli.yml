@@ -100,3 +100,13 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-remove --no-install-recommends python3 util-linux
           mkdir -p /etc/openmediavault
           runuser -u nobody -- env AWTSERVER_SANDBOX_TEST=1 AWTSERVER_TUI_TEST_MODE=1 PYTHONDONTWRITEBYTECODE=1 python3 -B migration/debian/host_tui_sandbox_test.py
+      - name: Install command on disposable OMV-compatible container and uninstall
+        run: |
+          python3 -B awtserver installer install --apply
+          python3 -B /usr/local/bin/awtserver version
+          python3 -B /usr/local/bin/awtserver docs android-auto >/dev/null
+          python3 -B /usr/local/bin/awtserver doctor >/dev/null
+          python3 -B /usr/local/bin/awtserver uninstall
+          test ! -e /opt/awtserver
+          test ! -L /usr/local/bin/awtserver
+          test -d /etc/openmediavault

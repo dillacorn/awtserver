@@ -104,6 +104,24 @@ jobs:
         run: |
           python3 -B awtserver installer install --apply
           python3 -B /usr/local/bin/awtserver version
+          python3 -B - <<'PY'
+          from pathlib import Path
+          import shutil
+          import tempfile
+          import awtserver_installer as manager
+          with tempfile.TemporaryDirectory(prefix="awtserver-update-ci-") as tmp:
+              src = Path(tmp)
+              for rel in manager.file_list():
+                  file = src / rel
+                  file.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(manager.ROOT / rel, file)
+              doc = src / "docs/quick/android-auto.md"
+              doc.write_text(doc.read_text() + "\nUpdated revision in disposable CI.\n")
+              assert manager.update(src, revision="ci-update")
+              assert not manager.update(src, revision="ci-update")
+              assert manager.checked_install()["revision"] == "ci-update"
+          PY
+          python3 -B /usr/local/bin/awtserver version
           python3 -B /usr/local/bin/awtserver docs android-auto >/dev/null
           python3 -B /usr/local/bin/awtserver doctor >/dev/null
           python3 -B /usr/local/bin/awtserver uninstall

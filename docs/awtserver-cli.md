@@ -70,6 +70,10 @@ python3 awtserver_tui.py
 
 The compact TUI has **Status / Packages / Schedules / Guides** categories. **Arrow keys or j/k** select and scroll, **Enter** opens details, **Esc or h** returns, and **q** quits. The Guides menu groups short documents under Remote access, Networking, Applications, Storage and Maintenance. It does not write files, install packages, or activate jobs. Window resizing and a small-terminal warning are supported. Configuration selection and commit/apply workflows remain CLI-only while their safety gates are tested.
 
+## Host inventory before OMV feature parity
+
+`migration/debian/feature_probe.py` is a separate, read-only probe for the current OMV host. It reports service/package/timer presence and job counts without displaying host IPs, disk identifiers, cron commands, emails or container names. Its output helps determine which features must be adopted; it is not a backup or permission to change the host.
+
 ## Planned expansion
 
 The CLI remains the noninteractive backend for the initial read-only terminal UI inspired by [smtty](https://github.com/dillacorn/smtty). The eventual menu can show service state, choose install profiles, edit and toggle scheduled tasks, review changes, and guide individual service setup. TUI navigation must never become necessary to use the CLI.

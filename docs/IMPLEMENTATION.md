@@ -26,6 +26,9 @@ This is the development coverage checklist, not a claim that a complete installe
 - [ ] SMART alerting, email delivery, deduplicated scheduled notification, APC UPS shutdown and time sync tested
 - [x] VM-only UUID-checked restic OS config snapshot (existing encrypted repository)
 - [ ] USB automated backup timers, boot/EFI and full OS recovery, application databases, off-host backups and verified restores
+- [ ] VM staging restore test: ensure encrypted repository recovery succeeds without writing the running root filesystem
+- [ ] 80% alert schedule, deduplication, clear/recovery notification, SMTP transport verification and test mail delivery
+- [ ] Identify real NAS AIO schedule/settings, script owner and USB backup mount by sanitized read-only live probe
 - [ ] All selected Docker services from the current OMV inventory, validated independently
 
 ## C. Scheduling, CLI and terminal UI

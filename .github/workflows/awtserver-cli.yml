@@ -51,7 +51,7 @@ jobs:
       - name: Python syntax and unit tests
         run: |
           python3 -m py_compile awtserver awtserver.py awtserver_cron.py awtserver_tui.py awtserver_docs.py awtserver_installer.py awtserver_storage.py awtserver_snapraid.py awtserver_backup.py awtserver_monitor.py awtserver_schedule_review.py migration/debian/feature_probe.py migration/debian/host_tui_sandbox_test.py tests/test_awtserver*.py
-          AWTSERVER_SANDBOX_TEST=1 python3 -m unittest discover -s tests -p 'test_awtserver*.py' -v
+          AWTSERVER_SANDBOX_TEST=1 AWTSERVER_TUI_TEST_MODE=1 python3 -m unittest discover -s tests -p 'test_awtserver*.py' -v
           python3 awtserver docs
           python3 awtserver docs remote-apps
           python3 awtserver docs snapraid
@@ -96,4 +96,4 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-remove --no-install-recommends python3 util-linux
           mkdir -p /etc/openmediavault
-          AWTSERVER_SANDBOX_TEST=1 runuser -u nobody -- python3 -B migration/debian/host_tui_sandbox_test.py
+          runuser -u nobody -- env AWTSERVER_SANDBOX_TEST=1 AWTSERVER_TUI_TEST_MODE=1 PYTHONDONTWRITEBYTECODE=1 python3 -B migration/debian/host_tui_sandbox_test.py

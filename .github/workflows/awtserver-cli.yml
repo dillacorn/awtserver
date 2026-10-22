@@ -13,6 +13,8 @@ on:
       - "awtserver_snapraid.py"
       - "awtserver_backup.py"
       - "awtserver_monitor.py"
+      - "awtserver_schedule_review.py"
+      - "docs/examples/**"
       - "tests/test_awtserver*.py"
       - "docs/quick/**"
       - "migration/debian/feature_probe.py"
@@ -30,6 +32,8 @@ on:
       - "awtserver_snapraid.py"
       - "awtserver_backup.py"
       - "awtserver_monitor.py"
+      - "awtserver_schedule_review.py"
+      - "docs/examples/**"
       - "tests/test_awtserver*.py"
       - "docs/quick/**"
       - "migration/debian/feature_probe.py"
@@ -46,11 +50,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Python syntax and unit tests
         run: |
-          python3 -m py_compile awtserver awtserver.py awtserver_cron.py awtserver_tui.py awtserver_docs.py awtserver_installer.py awtserver_storage.py awtserver_snapraid.py awtserver_backup.py awtserver_monitor.py migration/debian/feature_probe.py tests/test_awtserver*.py
+          python3 -m py_compile awtserver awtserver.py awtserver_cron.py awtserver_tui.py awtserver_docs.py awtserver_installer.py awtserver_storage.py awtserver_snapraid.py awtserver_backup.py awtserver_monitor.py awtserver_schedule_review.py migration/debian/feature_probe.py tests/test_awtserver*.py
           python3 -m unittest discover -s tests -p 'test_awtserver*.py' -v
           python3 awtserver docs
           python3 awtserver docs remote-apps
           python3 awtserver docs snapraid
+          python3 awtserver schedules review --min-gap 60
           python3 awtserver storage tools
           python3 awtserver snapraid plan
           python3 awtserver monitor stats

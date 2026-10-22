@@ -21,6 +21,12 @@
 | Available disk tools | gdu, ncdu, duf, btop packages absent | Optional UI tools, not required for the base system |
 | Other installed packages | ClamAV, unattended-upgrades present | Existence alone does not establish scheduled scan health or package-update success |
 
+## Confirmed scheduled-job audit
+
+The separate read-only audit confirmed **five enabled scheduled tasks** (three OMV custom and two local rsync), plus four disabled custom tasks. The daily 03:00 backup and 03:45 SnapRAID jobs have only 45 minutes between starts. Two rsync jobs can start 15 minutes apart on a Sunday that falls on the 17th. The weekly Docker maintenance job uses `@weekly` and needs its actual expansion verified. These are potential overlaps, not confirmed failures.
+
+See [full sanitized job schedule table](omv-schedules-2026-10-22.md). Do not duplicate them in another cron file on the active host.
+
 ## Important distinctions
 
 - `docker-ce` is a confirmed installed package, not proof of exact Compose plugin version, package repository key or complete service sources.

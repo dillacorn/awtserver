@@ -35,6 +35,9 @@ def main(argv: list[str] | None = None) -> int:
     if args[0] in ("monitor", "health"):
         import awtserver_monitor as monitor
         return monitor.main(args[1:])
+    if args[0] in ("schedules", "schedule-review"):
+        import awtserver_schedule_review as schedules
+        return schedules.main(args[1:])
     if args[0] == "installer":
         import awtserver_installer as installer
         return installer.main(args[1:])

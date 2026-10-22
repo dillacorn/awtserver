@@ -126,6 +126,20 @@ class Safety(unittest.TestCase):
         run.assert_not_called()
         guard.assert_called_once_with(False)
 
+    @patch.object(awt, "apply_guard")
+    @patch.object(awt.subprocess, "run")
+    def test_vm_install_never_allows_package_removals(self, run, guard):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(awt.main(["install", "--apply", "--confirm-vm",
+                                       "--profiles", "storage"]), 0)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(commands[0], ["apt-get", "update"])
+        self.assertIn("--no-remove", commands[1])
+        self.assertIn("--simulate", commands[1])
+        self.assertIn("--no-remove", commands[2])
+        self.assertIn("-y", commands[2])
+        guard.assert_called_once_with(True)
+
     def test_job_preview_does_not_persist(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "jobs.json"

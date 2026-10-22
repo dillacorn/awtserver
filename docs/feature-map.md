@@ -7,7 +7,7 @@
 | Host management and updates | APT, unattended-upgrades, SSH, service status | Read-only doctor and basic package plans |
 | Storage disks and filesystems | Stable UUID mounts, ext4, systemd ordering, permissions | Read-only lsblk/findmnt and space use; mount writes not implemented |
 | SnapRAID / mergerfs | Native packages, AIO v3.4 and existing parity/content metadata | Read-only mergerfs discovery; VM-only AIO script staging and guarded cron planner; no parity writes |
-| Docker and app management | Compose, Dockge optional; preserve stacks, binds, networks and data | Debian Docker packages opt-in; no app installation |
+| Docker and app management | Docker CE/Compose plugin (observed on OMV), Dockge optional; preserve stacks, binds, networks and data | Debian archive Docker explicitly optional; official Docker provisioning not implemented |
 | FTP | ProFTPD, accounts, TLS, passive ports, Fail2ban jail | Package planning only |
 | SMB/NFS sharing | Samba optional; NFS only when explicitly needed | Samba package opt-in; no share writes |
 | DNS / remote connectivity | Pi-hole, Quad9, Gluetun, host/sidecar Tailscale | Existing service documentation only |

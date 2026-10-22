@@ -31,6 +31,9 @@ PROFILES = {
     "scheduler": ("cron",),
     "sharing": ("samba",),
     "backup": ("rsync",),
+    "recovery": ("restic",),
+    "tooling": ("gdu", "ncdu", "duf", "btop", "util-linux"),
+    "snapraid-aio-deps": ("bc", "jq", "python3-markdown", "util-linux"),
 }
 DEFAULT_PROFILES = ("base", "access", "storage", "backup")
 NAME_RE = re.compile(r"[a-z][a-z0-9_-]{0,47}\Z")

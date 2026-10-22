@@ -60,6 +60,22 @@ class GuideTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             tui.menu_for("guide:nonexistent")
 
+    def test_wrapped_tui_guides_do_not_hide_long_instructions(self):
+        raw = "# **Tailscale**\n\n1. Configure **MagicDNS** at [Tailscale Settings](https://example.com/very/long/path) then test outside the house."
+        lines = tui.detail_lines(raw, 42, markdown=True)
+        self.assertTrue(lines)
+        self.assertTrue(all(len(line) <= 36 for line in lines))
+        self.assertIn("MagicDNS", " ".join(lines))
+        self.assertNotIn("https://", " ".join(lines))
+        self.assertTrue(any(line.startswith("1.") for line in lines))
+
+    def test_quick_guide_full_reference_urls_survive_install(self):
+        for slug in ("remote-apps", "dns", "docker", "storage", "jobs"):
+            text = docs.read_topic(slug)
+            self.assertNotIn("](../../", text)
+            self.assertNotIn("](../", text)
+        self.assertIn("github.com/dillacorn/awtserver", docs.read_topic("remote-apps"))
+
     def test_terminal_command_without_install(self):
         result = subprocess.run(
             [sys.executable, str(ROOT / "awtserver"), "docs", "android-auto"],

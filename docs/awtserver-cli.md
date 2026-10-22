@@ -1,12 +1,29 @@
-# awtserver CLI prototype
+# awtserver CLI and safety boundaries
 
-**Experimental:** Tested code paths are intended for a **disposable Debian 13 virtual machine**. There is no supported live-NAS installation or OMV removal procedure.
+**Command-only installation:** Debian 12 and 13, including OMV, can run the read-only terminal UI and diagnostics. Installing the command **does not enable service configuration**. Those write operations remain restricted to disposable Debian 13 virtual machines.
 
-## Terminal command and quick guides
+## Install, update and uninstall
 
-From the checked-out development branch, run `python3 awtserver` to open the **read-only** TUI, or `python3 awtserver docs` for short topics. Examples: `python3 awtserver docs remote-apps` and `python3 awtserver docs android-auto`. All quick guides work offline after the files have been downloaded.
+```bash
+curl -fsSL https://raw.githubusercontent.com/dillacorn/awtserver/main/install.sh | sudo bash
+awtserver
+sudo awtserver update
+sudo awtserver uninstall
+```
 
-On a **disposable Debian 13 VM**, `python3 awtserver installer` previews a first-time command install. After confirming the source checkout and taking a snapshot, `sudo python3 awtserver installer --apply --confirm-vm` installs the reviewed files to `/opt/awtserver` and a symlink at `/usr/local/bin/awtserver`. Thereafter run `awtserver`, `awtserver doctor`, or `awtserver docs`. Existing installation paths are never overwritten; update and uninstall are **not implemented**. No other host is supported for installation.
+This bootstrap gets a GitHub revision, fetches the source over HTTPS and installs the **allowlisted program files** into `/opt/awtserver`, with the command link `/usr/local/bin/awtserver`. As with any pipe-to-shell installation, review [the bootstrap source](https://github.com/dillacorn/awtserver/blob/main/install.sh) before running it. Requires Python 3, curl, and root privileges for system-wide installation. It never installs packages or starts services.
+
+- **Install** refuses an existing command or installation. No overwrite or change to existing user files.
+- **Update** fetches a SHA-pinned `main` archive, checks the installed manifest and file hashes, stages the new code and keeps rollback files if final cleanup fails. It refuses changed files, symlinks and unexpected contents.
+- **Uninstall** removes **only** the verified program files and the owned symlink. It leaves `/etc`, `/var/lib`, system jobs, Docker volumes, storage, backups and your existing NAS configurations alone. If anything is unrecognized, it fails without removing that content.
+- `awtserver version` prints the installed revision. `awtserver installer` previews a local install; no other management action is automatic.
+- On an already deployed system, always verify current service permissions and back up important configurations independently. This manager is **not** an OMV migration/uninstaller.
+
+Unattended automatic updates are **not** enabled. You explicitly run `sudo awtserver update`. A GitHub `main` merge provides a new upstream revision; no GitHub Release is needed.
+
+From a checkout, `python3 awtserver` opens the read-only TUI or `python3 awtserver docs` displays the offline topics. Example: `python3 awtserver docs android-auto`. Full service-configuration and disk-recovery workflows remain experimental.
+
+
 
 ## Try the CLI
 

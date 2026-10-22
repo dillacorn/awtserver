@@ -41,6 +41,7 @@ SUBMENU = {
                  ("Schedule preview", "snapraid:plan"),
                  ("Setup instructions", "doc:snapraid")),
     "maintenance": (("Scheduled jobs", "menu:schedules"),
+                    ("OMV historical schedule audit", "schedule:review"),
                     ("USB backup and recovery", "doc:recovery-usb"),
                     ("Capacity emails", "doc:alerts"),
                     ("UPS and SMART", "doc:smart-ups")),

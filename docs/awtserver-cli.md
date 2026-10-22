@@ -32,7 +32,7 @@ The package profiles are independent. The default includes only `base`, `access`
 - `awtserver storage disks|pools|tools` reports devices, mergerfs pools and optional disk TUIs.
 - `awtserver snapraid status|plan|enable|disable|sync` provides VM-only AIO scheduling (not a SnapRAID engine).
 - `awtserver monitor stats|usage|check|notify` provides status, missing-mount detection and optional guarded mail.
-- `awtserver backup plan|snapshot|restore-plan` provides UUID-verified, encrypted restic OS backup planning for a separately initialized USB repository.
+- `awtserver backup plan|snapshot|restore-plan|restore-stage` provides UUID-verified, encrypted restic OS backup planning for a separately initialized USB repository.
 
 More: `awtserver docs mergerfs`, `snapraid`, `alerts`, `recovery-usb`, `smart-ups`. Every write remains a separate Debian 13 disposable-VM operation; real OMV is not modified.
 

@@ -41,6 +41,12 @@ def main(argv: list[str] | None = None) -> int:
     if args[0] == "installer":
         import awtserver_installer as installer
         return installer.main(args[1:])
+    if args[0] == "version":
+        import awtserver_installer as installer
+        return installer.main(["status"])
+    if args[0] in ("update", "uninstall"):
+        import awtserver_installer as installer
+        return installer.main([args[0], "--apply", *args[1:]])
     return cli.main(args)
 
 

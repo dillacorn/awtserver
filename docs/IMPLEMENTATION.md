@@ -31,6 +31,8 @@ This is the development coverage checklist, not a claim that a complete installe
 - [ ] Real cron execution on Debian 13 VM: user identity, enable/disable, reboot, missed runs, schedule overlap
 - [ ] Job edits, locking, timeouts, logs, failed-job alerts and recovery
 - [x] Read-only keyboard TUI using the same backend as CLI
+- [x] Executable launcher dispatches CLI, compact TUI and offline categorized guides; VM-only first-install command
+- [ ] Command updater/uninstaller with version detection, safe replacement, explicit rollback and tested ownership
 - [ ] Interactive profile choices, job configuration/toggles, previews, confirmation and transactions
 - [ ] SSH/TTY visual and input validation: resize, minimal size, keyboard handling, unsupported terminal, interrupted session
 

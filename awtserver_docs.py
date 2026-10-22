@@ -16,7 +16,12 @@ CATALOG = (
     ("Networking", "dns", "Pi-hole and Tailscale DNS", "dns.md"),
     ("Applications", "docker", "Docker safety checklist", "docker.md"),
     ("Storage", "storage", "Disk and SnapRAID safety", "storage.md"),
+    ("Storage", "mergerfs", "mergerfs pool tools", "mergerfs.md"),
+    ("Storage", "snapraid", "SnapRAID AIO setup", "snapraid.md"),
     ("Maintenance", "jobs", "Scheduled jobs", "jobs.md"),
+    ("Maintenance", "recovery-usb", "USB OS recovery", "recovery-usb.md"),
+    ("Maintenance", "alerts", "Disk and email alerts", "alerts.md"),
+    ("Maintenance", "smart-ups", "SMART and APC UPS", "smart-ups.md"),
 )
 
 

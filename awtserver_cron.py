@@ -14,7 +14,7 @@ import stat
 import tempfile
 import subprocess
 
-from awtserver import validate_job, valid_cron
+from awtserver import apply_guard, validate_job
 
 CRON_FILE = Path("/etc/cron.d/awtserver")
 SCRIPT_DIR = Path("/usr/local/libexec/awtserver-jobs")
@@ -106,6 +106,7 @@ def preview_cron(jobs: list[dict], path: Path = CRON_FILE) -> str:
 
 def sync_cron(jobs: list[dict], path: Path = CRON_FILE) -> bool:
     """Deploy only an owned, managed cron file, after caller performed VM gate."""
+    apply_guard(True)  # also protects direct module callers, not only the CLI
     if path.parent.is_symlink():
         raise ValueError("Refusing symlinked /etc/cron.d")
     _checked_root_path(path.parent, directory=True)

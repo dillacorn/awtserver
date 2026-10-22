@@ -31,6 +31,7 @@ FILES = (
     "awtserver_snapraid.py",
     "awtserver_backup.py",
     "awtserver_monitor.py",
+    "awtserver_schedule_review.py",
 )
 MARKER = ".awtserver-managed-v1"
 

@@ -16,7 +16,8 @@ This is the development coverage checklist, not a claim that a complete installe
 
 - [ ] SSH keys, LAN/Tailscale recovery, Fail2ban and firewall ordering
 - [ ] DNS bootstrap with alternate resolver, Pi-hole integration, stable networking and Tailscale connectivity
-- [ ] Disk read-only discovery, UUID/by-id mounts, ext4/mergerfs, ACLs, ownership and mount ordering
+- [x] Read-only lsblk/findmnt device + mergerfs views and statvfs 80% capacity threshold
+- [ ] Disk UUID/by-id mount editing, ext4/mergerfs configuration, ACLs, ownership and mount ordering
 - [ ] SnapRAID parity/data/content and AIO scheduling/thresholds, tested on disposable virtual disks
 - [ ] Docker Compose project creation, configuration/secrets, bind mounts, named volumes, sidecars and VPN namespace dependencies
 - [ ] FTP/ProFTPD with TLS, user directories and passive ports; opt-in Samba/WSDD share profile

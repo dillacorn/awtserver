@@ -150,6 +150,8 @@ def launch_tool(action: str, screen) -> str:
     }
     if action not in allowed:
         raise ValueError("Unknown external tool")
+    if os.environ.get("AWTSERVER_TUI_TEST_MODE") == "1":
+        return f"{action} launch disabled during safe TUI testing."
     if os.geteuid() == 0:
         return "External disk browsers are blocked as root; use an unprivileged account."
     argv = allowed[action]

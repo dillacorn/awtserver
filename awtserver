@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""awtserver command, usable directly or from a VM-only installed command."""
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+# Resolve symlinks so /usr/local/bin/awtserver can point to a reviewed
+# /opt/awtserver/awtserver installation and find adjacent Python modules.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import awtserver as cli
+import awtserver_docs as docs
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    if not args:
+        import awtserver_tui as tui
+        return tui.main()
+    if args[0] in ("docs", "guide"):
+        return docs.main(args[1:])
+    if args[0] == "tui":
+        import awtserver_tui as tui
+        return tui.main()
+    return cli.main(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

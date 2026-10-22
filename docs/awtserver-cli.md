@@ -29,11 +29,20 @@ python3 awtserver.py jobs enable --name backups
 python3 awtserver.py jobs disable --name backups
 ```
 
-**Important:** These are **declarative schedule previews only**. An `enabled` flag does **not** install or start a cron job. The CLI does not execute any scheduled script.
+**Recording and activating are separate operations.** `jobs add/enable/disable/remove` preview a desired state by default. On a disposable Debian 13 VM, their `--apply --confirm-vm` flags save only private state at `/var/lib/awtserver/jobs.json` (mode 0600). A job's `enabled` field is **desired state**, not proof that it runs.
 
-On a disposable Debian 13 VM only, `--apply --confirm-vm` saves the desired state at `/var/lib/awtserver/jobs.json` (private, mode 0600). It still does not touch `/etc/cron*` or systemd timers. The `jobs remove` action removes only the named entry from this private state.
+A separate synchronization action is available:
 
-Input limits are deliberate: five numeric cron fields, lowercase job names, a non-root account name, and one script path directly under `/usr/local/libexec/awtserver-jobs/`. Executable ownership, user accounts, schedules, lock handling, notifications, and safe cron or systemd deployment will require separate validation before any job-activation feature is added.
+```bash
+python3 awtserver.py jobs render
+python3 awtserver.py jobs sync
+```
+
+Both commands above are read-only previews. **Only in a disposable Debian 13 VM**, after provisioning a non-root execution account, writing a suitable root-owned executable script directly under `/usr/local/libexec/awtserver-jobs/`, and installing/running Debian's `cron` service, run `jobs sync --apply --confirm-vm` to install or update **only** the managed `/etc/cron.d/awtserver` file.
+
+Sync refuses existing unmanaged cron content, symlinked target files, unsafe cron directory ownership/permissions, inactive cron, missing execution users, root execution, non-executable or non-root-owned scripts, and scripts writable by other users. The resulting file is atomically installed as root-owned mode 0644. Disabled jobs appear only as comments. Changes to stored job state are **not** automatically synchronized; use `jobs render` to inspect differences first.
+
+Current limitations: five numeric cron fields, non-root job execution, strict script locations, no automatic user provisioning, no job-specific environment variables, no overlap locking or failure alert routing. Cron tasks missed while the VM is powered off are not caught up. **Cron activation remains experimental and is not authorized for the existing OMV server.**
 
 ## Planned expansion
 

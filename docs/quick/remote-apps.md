@@ -13,4 +13,4 @@ Repeat **for each app**. Compose templates are examples, not your live deploymen
 
 Troubleshoot in order: connected phone → machine online → tailnet access rule → MagicDNS/HTTPS → Serve target → app healthy.
 
-Detailed, topology-specific references: [Seerr](../../docker/seerr/OPERATIONS.md) · [Navidrome](../../docker/navidrome/OPERATIONS.md) · [Pi-hole networking](../../docker/pihole/NETWORKING.md). Do not blindly apply those historical host paths to a fresh Debian VM.
+Detailed, topology-specific references: [Seerr](https://github.com/dillacorn/awtserver/blob/main/docker/seerr/OPERATIONS.md) · [Navidrome](https://github.com/dillacorn/awtserver/blob/main/docker/navidrome/OPERATIONS.md) · [Pi-hole networking](https://github.com/dillacorn/awtserver/blob/main/docker/pihole/NETWORKING.md). Do not blindly apply those historical host paths to a fresh Debian VM.

@@ -56,7 +56,7 @@ The early terminal UI uses **arrow keys or j/k** to select options, **Enter** to
 
 ## Planned expansion
 
-The CLI will be the noninteractive backend for a later raw-key, arrow-key **TUI inspired by [smtty](https://github.com/dillacorn/smtty)**. The eventual menu can show service state, choose install profiles, edit and toggle scheduled tasks, review changes, and guide individual service setup. TUI navigation must never become necessary to use the CLI.
+The CLI remains the noninteractive backend for the initial read-only terminal UI inspired by [smtty](https://github.com/dillacorn/smtty). The eventual menu can show service state, choose install profiles, edit and toggle scheduled tasks, review changes, and guide individual service setup. TUI navigation must never become necessary to use the CLI.
 
 Actual storage mounts, SnapRAID parity configurations, existing array discovery, Samba shares and ACLs, Docker stack restore, Pi-hole networking, Tailscale identity, Fail2ban jails, APC UPS policy, SMTP credentials and OpenMediaVault removal remain explicitly **out of scope** for this prototype. They are captured in the [feature map](feature-map.md) and existing [recovery requirements](../migration/debian/restore-manifest.md). No host behavior is inferred from the public repository.
 

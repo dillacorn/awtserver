@@ -2,6 +2,12 @@
 
 Initial live Debian 12/OMV read-only test: **10/10 CLI checks passed** and 11 files compiled, without a permanent install.
 
+## First real OMV run (2026-10-22)
+
+The operator ran the pinned temporary test with unprivileged sandbox writes. The production/root write guard **passed**; the suite executed 96 tests with **one test-fixture failure** in `test_real_host_rejected`. That test mocked Debian 13 and VM status but not the actual presence of `/etc/openmediavault`, and incorrectly expected the VM-specific error. The guard correctly rejected the OMV host instead. The runner stopped before checking real read-only TUI backends or launching the interactive menu. No server configuration changes were observed.
+
+**Fix:** Isolated OMV detection in `omv_present()`, mocked absence only for the non-VM scenario, and added an explicit OMV-present regression test even when Debian 13 + VM are simulated. This retains the OMV write refusal; it does **not** relax it.
+
 ## Next safe test
 
 Run migration/debian/host_tui_sandbox_test.py from a **pinned development commit** as user **nobody**, with AWTSERVER_SANDBOX_TEST=1.

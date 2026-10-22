@@ -15,6 +15,7 @@ on:
       - "awtserver_monitor.py"
       - "tests/test_awtserver*.py"
       - "docs/quick/**"
+      - "migration/debian/feature_probe.py"
       - "docs/awtserver-cli.md"
       - ".github/workflows/awtserver-cli.yml"
   pull_request:
@@ -31,6 +32,7 @@ on:
       - "awtserver_monitor.py"
       - "tests/test_awtserver*.py"
       - "docs/quick/**"
+      - "migration/debian/feature_probe.py"
       - "docs/awtserver-cli.md"
       - ".github/workflows/awtserver-cli.yml"
 
@@ -44,10 +46,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Python syntax and unit tests
         run: |
-          python3 -m py_compile awtserver awtserver.py awtserver_cron.py awtserver_tui.py awtserver_docs.py awtserver_installer.py awtserver_storage.py awtserver_snapraid.py awtserver_backup.py awtserver_monitor.py tests/test_awtserver*.py
+          python3 -m py_compile awtserver awtserver.py awtserver_cron.py awtserver_tui.py awtserver_docs.py awtserver_installer.py awtserver_storage.py awtserver_snapraid.py awtserver_backup.py awtserver_monitor.py migration/debian/feature_probe.py tests/test_awtserver*.py
           python3 -m unittest discover -s tests -p 'test_awtserver*.py' -v
           python3 awtserver docs
           python3 awtserver docs remote-apps
+          python3 awtserver docs snapraid
+          python3 awtserver storage tools
+          python3 awtserver snapraid plan
+          python3 awtserver monitor stats
           python3 awtserver installer
           python3 awtserver.py profiles
           python3 awtserver.py plan

@@ -36,6 +36,10 @@ The package profiles are independent. The default includes only `base`, `access`
 
 More: `awtserver docs mergerfs`, `snapraid`, `alerts`, `recovery-usb`, `smart-ups`. Every write remains a separate Debian 13 disposable-VM operation; real OMV is not modified.
 
+## Historical schedule review
+
+`python3 awtserver schedules list` and `python3 awtserver schedules review --min-gap 60` inspect a **non-deployable October 22 OMV audit example**. This preserves only categories, schedules, enabled states and email flags. It flags possible short start gaps, not proven runtime overlap. TUI: Maintenance → OMV historical schedule audit. It never reads commands, runs scripts, activates cron or imports live OMV configuration.
+
 ## Job planning
 
 ```bash

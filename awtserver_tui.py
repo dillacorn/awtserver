@@ -16,6 +16,7 @@ import awtserver_docs
 import awtserver_storage
 import awtserver_snapraid
 import awtserver_monitor
+import awtserver_schedule_review
 
 # Stable category-first navigation. Only render/read actions exist.
 ROOT_ITEMS = (

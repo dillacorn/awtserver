@@ -8,7 +8,8 @@ This is the development coverage checklist, not a claim that a complete installe
 - [x] Root/VM/Debian-13 guarded package install; APT removals prohibited
 - [x] Offline tests and Debian 13 APT package-resolution CI
 - [ ] Clean Debian 13 VM: full package installation, service startup and reboot
-- [ ] Docker provider policy: Debian packages versus Docker official APT repository, Compose v2, containerd and firewall interactions
+- [x] Explicit `docker-debian` alternative instead of ambiguous provider-independent Docker install
+- [ ] **Implement and validate official Docker CE/Compose plugin** as the default parity path for the existing OMV host; repository signing, conflict checks, firewall and idempotent upgrade behavior
 - [ ] Repeat install, update, interruption, failed dependency and rollback tests
 - [ ] Installer distribution/update/uninstall commands with pinned sources and version tracking
 

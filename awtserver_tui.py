@@ -70,8 +70,8 @@ def run_ui(screen) -> None:
     while True:
         screen.erase()
         height, width = screen.getmaxyx()
-        if height < 8 or width < 30:
-            safe_line(screen, 0, 0, "Enlarge terminal (30x8 minimum)", width)
+        if height < 12 or width < 30:
+            safe_line(screen, 0, 0, "Enlarge terminal (30x12 minimum)", width)
             screen.refresh()
             key = screen.getch()
             if key in (ord("q"), 27):

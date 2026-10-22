@@ -215,10 +215,19 @@ def run_ui(screen) -> None:
             items = menu_for(section)
             safe_line(screen, 3, 2, section.replace("guide:", ""), width - 4,
                       curses.A_BOLD)
-            for index, (label, _) in enumerate(items):
+            # Reserve row height-2 for help and height-1 for screen edge.
+            # Short SSH terminals must never hide the selected menu item.
+            menu_rows = max(1, height - 7)
+            first = max(0, min(selected - menu_rows + 1, len(items) - menu_rows))
+            for index in range(first, min(len(items), first + menu_rows)):
+                label, _ = items[index]
                 prefix = "> " if index == selected else "  "
-                safe_line(screen, 5 + index, 2, prefix + label, width - 4,
+                safe_line(screen, 5 + index - first, 2, prefix + label, width - 4,
                           curses.A_REVERSE if index == selected else 0)
+            if len(items) > menu_rows:
+                safe_line(screen, height - 3, 2,
+                          f"Items {first + 1}-{min(len(items), first + menu_rows)}"
+                          f"/{len(items)}", width - 4)
             help_line = "Up/Down select | Enter open | Esc back | q quit"
         safe_line(screen, height - 2, 2, help_line, width - 4)
         screen.refresh()

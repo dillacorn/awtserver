@@ -140,6 +140,29 @@ class Safety(unittest.TestCase):
         self.assertIn("-y", commands[2])
         guard.assert_called_once_with(True)
 
+    def test_cron_sync_preview_never_applies(self):
+        import awtserver_cron as cron
+        with patch.object(awt, "load_jobs", return_value=[]), \
+             patch.object(cron, "preview_cron", return_value="diff\\n"), \
+             patch.object(cron, "sync_cron") as sync, \
+             patch.object(awt, "apply_guard") as guard:
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(awt.main(["jobs", "sync"]), 0)
+            self.assertIn("Preview only", output.getvalue())
+            sync.assert_not_called()
+            guard.assert_not_called()
+
+    def test_cron_sync_apply_gate_before_changes(self):
+        import awtserver_cron as cron
+        with patch.object(awt, "load_jobs", return_value=[]), \
+             patch.object(cron, "preview_cron", return_value="diff\\n"), \
+             patch.object(cron, "sync_cron") as sync, \
+             patch.object(awt, "apply_guard", side_effect=ValueError("blocked")):
+            with contextlib.redirect_stdout(io.StringIO()), \
+                 contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(awt.main(["jobs", "sync", "--apply", "--confirm-vm"]), 1)
+            sync.assert_not_called()
+
     def test_job_preview_does_not_persist(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "jobs.json"

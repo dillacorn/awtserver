@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
+# Installed CLI code is immutable; never create __pycache__ under /opt.
+sys.dont_write_bytecode = True
+
 # Resolve symlinks so /usr/local/bin/awtserver can point to a reviewed
 # /opt/awtserver/awtserver installation and find adjacent Python modules.
 sys.path.insert(0, str(Path(__file__).resolve().parent))

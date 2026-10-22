@@ -73,6 +73,11 @@ def virtual_machine() -> bool:
         return False
 
 
+def omv_present() -> bool:
+    """Detect an OpenMediaVault-managed host independently of the VM check."""
+    return Path("/etc/openmediavault").exists()
+
+
 def apply_guard(confirmed: bool) -> None:
     """Never permit package/state writes to the existing OMV NAS or a real host."""
     if not confirmed:
@@ -82,7 +87,7 @@ def apply_guard(confirmed: bool) -> None:
     os_info = parse_os_release()
     if os_info.get("ID") != "debian" or os_info.get("VERSION_ID") != "13":
         raise ValueError("Write blocked: Debian 13 is the only evaluated target")
-    if Path("/etc/openmediavault").exists():
+    if omv_present():
         raise ValueError("Write blocked: OpenMediaVault installation detected")
     if not virtual_machine():
         raise ValueError("Write blocked: disposable virtual machine not detected")
@@ -235,10 +240,10 @@ def doctor_snapshot() -> dict:
     output = {"os": info.get("PRETTY_NAME", "unknown"),
               "supported_apply_target": info.get("ID") == "debian"
                  and info.get("VERSION_ID") == "13"
-                 and not Path("/etc/openmediavault").exists()
+                 and not omv_present()
                  and virtual_machine(),
               "virtual_machine": virtual_machine(),
-              "omv_present": Path("/etc/openmediavault").exists(),
+              "omv_present": omv_present(),
               "services": {}}
     for name in names:
         try:

@@ -99,11 +99,20 @@ class Schedules(unittest.TestCase):
 
 
 class Safety(unittest.TestCase):
+    @patch.object(awt, "omv_present", return_value=False)
     @patch.object(awt, "virtual_machine", return_value=False)
     @patch.object(awt, "parse_os_release", return_value={"ID": "debian", "VERSION_ID": "13"})
     @patch.object(awt.os, "geteuid", return_value=0)
     def test_real_host_rejected(self, *_):
         with self.assertRaisesRegex(ValueError, "virtual machine"):
+            awt.apply_guard(True)
+
+    @patch.object(awt, "omv_present", return_value=True)
+    @patch.object(awt, "virtual_machine", return_value=True)
+    @patch.object(awt, "parse_os_release", return_value={"ID": "debian", "VERSION_ID": "13"})
+    @patch.object(awt.os, "geteuid", return_value=0)
+    def test_omv_blocks_writes_even_if_vm_detected(self, *_):
+        with self.assertRaisesRegex(ValueError, "OpenMediaVault"):
             awt.apply_guard(True)
 
     @patch.object(awt, "virtual_machine", return_value=True)

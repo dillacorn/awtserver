@@ -142,6 +142,7 @@ class FullNavigationTests(unittest.TestCase):
     def test_external_tools_never_shell_out_in_test(self):
         for tool in ("gdu", "ncdu"):
             with self.subTest(tool=tool), \
+                 patch.dict(tui.os.environ, {"AWTSERVER_TUI_TEST_MODE": "0"}), \
                  patch.object(tui.os, "geteuid", return_value=1000), \
                  patch.object(tui.shutil, "which", return_value="/usr/bin/"+tool), \
                  patch.object(tui.curses, "def_prog_mode"), \
@@ -167,7 +168,8 @@ class FullNavigationTests(unittest.TestCase):
                           tui.launch_tool("gdu", FakeScreen([])))
             self.assertIn("disabled during safe TUI testing",
                           tui.launch_tool("ncdu", FakeScreen([])))
-        with patch.object(tui.os, "geteuid", return_value=0), \
+        with patch.dict(tui.os.environ, {"AWTSERVER_TUI_TEST_MODE": "0"}), \
+             patch.object(tui.os, "geteuid", return_value=0), \
              patch.object(tui.subprocess, "run",
                           side_effect=AssertionError("root launched tool")):
             self.assertIn("blocked as root", tui.launch_tool("gdu", FakeScreen([])))

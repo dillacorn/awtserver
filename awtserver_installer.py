@@ -97,17 +97,26 @@ def manifest_for(source: Path, revision: str = "local") -> dict:
     }
 
 
+def require_root_owned(path: Path) -> None:
+    if path.stat().st_uid != 0:
+        raise ValueError("Managed program file must be root-owned")
+
+
 def checked_install(dest: Path = TARGET, command: Path = LINK) -> dict:
     """Reject foreign files, modifications, symlinks and redirected commands."""
     checked_parent(dest.parent)
     checked_parent(command.parent)
     if dest.is_symlink() or not dest.is_dir():
         raise ValueError("No verified awtserver installation")
+    require_root_owned(dest)
+    if dest.stat().st_mode & 0o022:
+        raise ValueError("Managed program directory is writable by others")
     if not command.is_symlink() or os.readlink(command) != str(dest / "awtserver"):
         raise ValueError("Command does not point to the managed installation")
     marker = dest / MARKER
-    if marker.is_symlink() or not marker.is_file() or marker.stat().st_uid != 0:
+    if marker.is_symlink() or not marker.is_file():
         raise ValueError("Missing or unsafe managed installation marker")
+    require_root_owned(marker)
     data = json.loads(marker.read_text(encoding="utf-8"))
     expected = {str(p) for p in file_list()}
     if (not isinstance(data, dict) or set(data) != {"format", "revision", "files"}
@@ -123,9 +132,14 @@ def checked_install(dest: Path = TARGET, command: Path = LINK) -> dict:
         rel = str(path.relative_to(dest))
         if path.is_file():
             actual_files.add(rel)
-            if path.stat().st_uid != 0:
-                raise ValueError("Non-root file in managed installation")
-        elif not path.is_dir():
+            require_root_owned(path)
+            if path.stat().st_mode & 0o022:
+                raise ValueError("Managed file is writable by others")
+        elif path.is_dir():
+            require_root_owned(path)
+            if path.stat().st_mode & 0o022:
+                raise ValueError("Unsafe managed subdirectory permissions")
+        else:
             raise ValueError("Unexpected installation entry")
     if actual_files != expected | {MARKER}:
         raise ValueError("Modified or foreign installation files; refusing changes")
@@ -144,6 +158,10 @@ def write_stage(source: Path, parent: Path, revision: str = "local") -> Path:
         for rel in file_list():
             path = stage / rel
             path.parent.mkdir(parents=True, exist_ok=True)
+            ancestor = path.parent
+            while ancestor != stage:
+                ancestor.chmod(0o755)
+                ancestor = ancestor.parent
             shutil.copyfile(source / rel, path, follow_symlinks=False)
             path.chmod(0o755 if str(rel) == "awtserver" else 0o644)
         marker = stage / MARKER

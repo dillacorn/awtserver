@@ -24,7 +24,8 @@ This is the development coverage checklist, not a claim that a complete installe
 - [ ] FTP/ProFTPD with TLS, user directories and passive ports; opt-in Samba/WSDD share profile
 - [x] Local disk/mount/fullness monitoring and VM-gated local-MTA email submission code
 - [ ] SMART alerting, email delivery, deduplicated scheduled notification, APC UPS shutdown and time sync tested
-- [ ] Consistent database/application backups, off-host backups and verified restores
+- [x] VM-only UUID-checked restic OS config snapshot (existing encrypted repository)
+- [ ] USB automated backup timers, boot/EFI and full OS recovery, application databases, off-host backups and verified restores
 - [ ] All selected Docker services from the current OMV inventory, validated independently
 
 ## C. Scheduling, CLI and terminal UI

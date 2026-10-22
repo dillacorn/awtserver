@@ -2,6 +2,12 @@
 
 **Experimental:** Tested code paths are intended for a **disposable Debian 13 virtual machine**. There is no supported live-NAS installation or OMV removal procedure.
 
+## Terminal command and quick guides
+
+From the checked-out development branch, run `python3 awtserver` to open the **read-only** TUI, or `python3 awtserver docs` for short topics. Examples: `python3 awtserver docs remote-apps` and `python3 awtserver docs android-auto`. All quick guides work offline after the files have been downloaded.
+
+On a **disposable Debian 13 VM**, `python3 awtserver installer` previews a first-time command install. After confirming the source checkout and taking a snapshot, `sudo python3 awtserver installer --apply --confirm-vm` installs the reviewed files to `/opt/awtserver` and a symlink at `/usr/local/bin/awtserver`. Thereafter run `awtserver`, `awtserver doctor`, or `awtserver docs`. Existing installation paths are never overwritten; update and uninstall are **not implemented**. No other host is supported for installation.
+
 ## Try the CLI
 
 From a checked-out feature branch:

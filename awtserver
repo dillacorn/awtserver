@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""awtserver command, usable directly or from a VM-only installed command."""
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+# Installed CLI code is immutable; never create __pycache__ under /opt.
+sys.dont_write_bytecode = True
+
+# Resolve symlinks so /usr/local/bin/awtserver can point to a reviewed
+# /opt/awtserver/awtserver installation and find adjacent Python modules.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import awtserver as cli
+import awtserver_docs as docs
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    if not args:
+        import awtserver_tui as tui
+        return tui.main()
+    if args[0] in ("docs", "guide"):
+        return docs.main(args[1:])
+    if args[0] == "tui":
+        import awtserver_tui as tui
+        return tui.main()
+    if args[0] in ("storage", "disks"):
+        import awtserver_storage as storage
+        return storage.main(args[1:])
+    if args[0] == "snapraid":
+        import awtserver_snapraid as snapraid
+        return snapraid.main(args[1:])
+    if args[0] == "backup":
+        import awtserver_backup as backup
+        return backup.main(args[1:])
+    if args[0] in ("monitor", "health"):
+        import awtserver_monitor as monitor
+        return monitor.main(args[1:])
+    if args[0] in ("schedules", "schedule-review"):
+        import awtserver_schedule_review as schedules
+        return schedules.main(args[1:])
+    if args[0] == "installer":
+        import awtserver_installer as installer
+        return installer.main(args[1:])
+    if args[0] == "version":
+        import awtserver_installer as installer
+        return installer.main(["status"])
+    if args[0] in ("update", "uninstall"):
+        import awtserver_installer as installer
+        return installer.main([args[0], "--apply", *args[1:]])
+    return cli.main(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -10,6 +10,7 @@ Compose templates, helper scripts and short service guides for a Debian Stable s
 | **Media** | [Jellyfin](jellyfin/README.md), [Seerr](seerr/README.md), [Navidrome](navidrome/README.md) |
 | **Management** | [Dockge](dockge/README.md), [Watchtower](watchtower/README.md) |
 | **Maintenance** | [Docker Engine recovery](engine-upgrade-recovery/README.md), [Tailscale certificates](tailscale-certs/README.md) |
+| **Remote access** | [Tailscale per-app setup](../docs/quick/remote-apps.md), [Android Auto Rules](../docs/quick/android-auto.md) |
 
 Other service templates are available in their respective subdirectories.
 

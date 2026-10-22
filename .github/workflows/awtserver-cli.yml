@@ -1,0 +1,130 @@
+name: awtserver CLI prototype
+
+on:
+  push:
+    paths:
+      - "awtserver"
+      - "install.sh"
+      - "awtserver.py"
+      - "awtserver_cron.py"
+      - "awtserver_tui.py"
+      - "awtserver_docs.py"
+      - "awtserver_installer.py"
+      - "awtserver_storage.py"
+      - "awtserver_snapraid.py"
+      - "awtserver_backup.py"
+      - "awtserver_monitor.py"
+      - "awtserver_schedule_review.py"
+      - "docs/examples/**"
+      - "tests/test_awtserver*.py"
+      - "docs/quick/**"
+      - "migration/debian/feature_probe.py"
+      - "docs/awtserver-cli.md"
+      - ".github/workflows/awtserver-cli.yml"
+  pull_request:
+    paths:
+      - "awtserver"
+      - "install.sh"
+      - "awtserver.py"
+      - "awtserver_cron.py"
+      - "awtserver_tui.py"
+      - "awtserver_docs.py"
+      - "awtserver_installer.py"
+      - "awtserver_storage.py"
+      - "awtserver_snapraid.py"
+      - "awtserver_backup.py"
+      - "awtserver_monitor.py"
+      - "awtserver_schedule_review.py"
+      - "docs/examples/**"
+      - "tests/test_awtserver*.py"
+      - "docs/quick/**"
+      - "migration/debian/feature_probe.py"
+      - "docs/awtserver-cli.md"
+      - ".github/workflows/awtserver-cli.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax and unit tests
+        run: |
+          bash -n install.sh
+          python3 -m py_compile awtserver awtserver.py awtserver_cron.py awtserver_tui.py awtserver_docs.py awtserver_installer.py awtserver_storage.py awtserver_snapraid.py awtserver_backup.py awtserver_monitor.py awtserver_schedule_review.py migration/debian/feature_probe.py migration/debian/host_tui_sandbox_test.py tests/test_awtserver*.py
+          AWTSERVER_SANDBOX_TEST=1 AWTSERVER_TUI_TEST_MODE=1 python3 -m unittest discover -s tests -p 'test_awtserver*.py' -v
+          python3 awtserver docs
+          python3 awtserver docs remote-apps
+          python3 awtserver docs snapraid
+          python3 awtserver schedules review --min-gap 60
+          python3 awtserver storage tools
+          python3 awtserver snapraid plan
+          python3 awtserver monitor stats
+          python3 awtserver installer
+          python3 awtserver.py profiles
+          python3 awtserver.py plan
+          python3 awtserver.py install --profiles base storage
+
+  debian13-package-resolution:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify package names and dependencies using Debian Stable
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-remove --no-install-recommends python3
+          python3 - <<'PY'
+          from awtserver import PROFILES, packages_for
+          from subprocess import run
+          from pathlib import Path
+          assert Path("/etc/os-release").read_text().find("VERSION_ID=\"13\"") >= 0
+          for name in sorted(PROFILES):
+              packages = packages_for([name])
+              print(f"Checking profile {name}: {packages}", flush=True)
+              run(["apt-get", "--simulate", "--no-remove", "install", *packages], check=True)
+          PY
+
+  debian12-omv-guard-simulation:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate complete sandbox suite with simulated OMV installed
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-remove --no-install-recommends python3 util-linux
+          mkdir -p /etc/openmediavault
+          runuser -u nobody -- env AWTSERVER_SANDBOX_TEST=1 AWTSERVER_TUI_TEST_MODE=1 PYTHONDONTWRITEBYTECODE=1 python3 -B migration/debian/host_tui_sandbox_test.py
+      - name: Install command on disposable OMV-compatible container and uninstall
+        run: |
+          python3 -B awtserver installer install --apply
+          python3 -B /usr/local/bin/awtserver version
+          python3 -B - <<'PY'
+          from pathlib import Path
+          import shutil
+          import tempfile
+          import awtserver_installer as manager
+          with tempfile.TemporaryDirectory(prefix="awtserver-update-ci-") as tmp:
+              src = Path(tmp)
+              for rel in manager.file_list():
+                  file = src / rel
+                  file.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(manager.ROOT / rel, file)
+              doc = src / "docs/quick/android-auto.md"
+              doc.write_text(doc.read_text() + "\nUpdated revision in disposable CI.\n")
+              assert manager.update(src, revision="ci-update")
+              assert not manager.update(src, revision="ci-update")
+              assert manager.checked_install()["revision"] == "ci-update"
+          PY
+          python3 -B /usr/local/bin/awtserver version
+          python3 -B /usr/local/bin/awtserver docs android-auto >/dev/null
+          python3 -B /usr/local/bin/awtserver doctor >/dev/null
+          python3 -B /usr/local/bin/awtserver uninstall
+          test ! -e /opt/awtserver
+          test ! -L /usr/local/bin/awtserver
+          test -d /etc/openmediavault

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import curses
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -149,6 +150,8 @@ def launch_tool(action: str, screen) -> str:
     }
     if action not in allowed:
         raise ValueError("Unknown external tool")
+    if os.geteuid() == 0:
+        return "External disk browsers are blocked as root; use an unprivileged account."
     argv = allowed[action]
     if not shutil.which(argv[0]):
         return f"{argv[0]} is not installed. Select the optional tooling package profile."

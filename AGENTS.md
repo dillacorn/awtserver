@@ -29,7 +29,7 @@ The full operational guides remain available even when a service README is short
 
 | Topic | Detailed sources |
 | --- | --- |
-| **awtserver CLI prototype** | [VM-only CLI commands and restrictions](docs/awtserver-cli.md), [OMV feature map](docs/feature-map.md); `awtserver.py` contains experimental package profiles and **declarative-only** scheduled-job state. A job's enabled flag does not install cron; do not claim it does. Production adoption, storage, network or OMV removal are not implemented. |
+| **awtserver CLI prototype** | [VM-only CLI commands and restrictions](docs/awtserver-cli.md), [OMV feature map](docs/feature-map.md); `awtserver.py` contains experimental package profiles and declarative job state. `awtserver_cron.py` can synchronize only an owned `/etc/cron.d/awtserver` file on a VM under explicit guards; job enable alone does not activate cron. Production adoption, storage, network or OMV removal are not implemented. |
 | **Debian build / server recovery** | [Inventory and historical transition plan](migration/debian/OPERATIONS.md), [restore requirements](migration/debian/restore-manifest.md), [host findings](migration/debian/host-findings-2026-10-20.md) |
 | **Docker services** | [Service index](docker/README.md), [historical Docker commands](docker/LEGACY-NOTES.md); inspect each service's Compose files and host runtime |
 | **Pi-hole, DNS and pihm** | [Local instructions](docker/pihole/AGENTS.md), [full operational notes](docker/pihole/OPERATIONS.md), [setup](docker/pihole/SETUP.md), [networking](docker/pihole/NETWORKING.md), [DNS recovery](docker/pihole/DNS-RECOVERY.md) |

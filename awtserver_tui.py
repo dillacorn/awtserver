@@ -100,6 +100,9 @@ def get_details(action: str) -> str:
         return json.dumps(awtserver_storage.pool_report(), indent=2)
     if action == "storage:tools":
         return json.dumps(awtserver_storage.tool_catalog(), indent=2)
+    if action == "schedule:review":
+        _, jobs = awtserver_schedule_review.load_inventory()
+        return json.dumps(awtserver_schedule_review.review(jobs), indent=2)
     if action == "snapraid:status":
         return json.dumps({"schedule": awtserver_snapraid.schedule_from_file(),
                            "warnings": awtserver_snapraid.prerequisites()}, indent=2)

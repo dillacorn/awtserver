@@ -1,0 +1,78 @@
+{
+  "source": "2026-10-22 sanitized OMV jobs_audit.py user-provided output",
+  "status": "historical-audit",
+  "jobs": [
+    {
+      "id": "omv-custom-1",
+      "kind": "omv-custom",
+      "category": "backup",
+      "enabled": false,
+      "schedule": "@weekly",
+      "email": true
+    },
+    {
+      "id": "omv-custom-2",
+      "kind": "omv-custom",
+      "category": "docker-maintenance",
+      "enabled": false,
+      "schedule": "* * * * *",
+      "email": false
+    },
+    {
+      "id": "omv-custom-3",
+      "kind": "omv-custom",
+      "category": "docker-maintenance",
+      "enabled": false,
+      "schedule": "* * * * *",
+      "email": false
+    },
+    {
+      "id": "omv-custom-4",
+      "kind": "omv-custom",
+      "category": "docker-maintenance",
+      "enabled": false,
+      "schedule": "* * * * *",
+      "email": false
+    },
+    {
+      "id": "omv-custom-5",
+      "kind": "omv-custom",
+      "category": "snapraid",
+      "enabled": true,
+      "schedule": "45 3 * * *",
+      "email": true
+    },
+    {
+      "id": "omv-custom-6",
+      "kind": "omv-custom",
+      "category": "docker-maintenance",
+      "enabled": true,
+      "schedule": "@weekly",
+      "email": true
+    },
+    {
+      "id": "omv-custom-7",
+      "kind": "omv-custom",
+      "category": "backup",
+      "enabled": true,
+      "schedule": "0 3 * * *",
+      "email": true
+    },
+    {
+      "id": "omv-rsync-1",
+      "kind": "omv-rsync",
+      "category": "rsync",
+      "enabled": true,
+      "schedule": "45 5 * * 7",
+      "email": false
+    },
+    {
+      "id": "omv-rsync-2",
+      "kind": "omv-rsync",
+      "category": "rsync",
+      "enabled": true,
+      "schedule": "0 6 17 * *",
+      "email": false
+    }
+  ]
+}

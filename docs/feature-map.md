@@ -5,18 +5,18 @@
 | OMV capability | Native Debian / awtserver target | Prototype status |
 | --- | --- | --- |
 | Host management and updates | APT, unattended-upgrades, SSH, service status | Read-only doctor and basic package plans |
-| Storage disks and filesystems | Stable UUID mounts, ext4, systemd ordering, permissions | Package planning only; no mount writes |
-| SnapRAID / mergerfs | Native packages, existing parity/content metadata and pool branches | Package planning only; no array initialization |
+| Storage disks and filesystems | Stable UUID mounts, ext4, systemd ordering, permissions | Read-only lsblk/findmnt and space use; mount writes not implemented |
+| SnapRAID / mergerfs | Native packages, AIO v3.4 and existing parity/content metadata | Read-only mergerfs discovery; VM-only AIO script staging and guarded cron planner; no parity writes |
 | Docker and app management | Compose, Dockge optional; preserve stacks, binds, networks and data | Debian Docker packages opt-in; no app installation |
 | FTP | ProFTPD, accounts, TLS, passive ports, Fail2ban jail | Package planning only |
 | SMB/NFS sharing | Samba optional; NFS only when explicitly needed | Samba package opt-in; no share writes |
 | DNS / remote connectivity | Pi-hole, Quad9, Gluetun, host/sidecar Tailscale | Existing service documentation only |
-| Monitoring | smartmontools, SMART tests, email alerts, syslog | Package planning only |
+| Monitoring | SMART, capacity, CPU/RAM stats, email alerts | Read-only statistics and 80% checks; VM-only manual email submission; no alert timer |
 | Power protection | apcupsd configuration and verified shutdown thresholds | Package planning only; no UPS policy |
 | Jobs and maintenance | Cron or reviewed systemd timers, user scripts, alerts | Declarative schedules and VM-only managed cron synchronization; no production deployment |
 | Users / groups and ACLs | Native user/group tools, ownership, POSIX ACLs | Not implemented |
 | Notifications | SMTP/other explicitly configured sender, failures and thresholds | Not implemented |
-| Backups and recovery | rsync/Borg where justified, tested application restores | rsync package planning; no backups performed |
+| Backups and recovery | Encrypted removable OS backup, tested application restores | VM-only USB UUID-verified restic OS config snapshot and isolated restore stage; no bootable restore |
 | Optional legacy features | ClamAV, Avahi, Chrony, collectd as justified by actual dependencies | Pending inspection |
 | OMV GUI/plugins | Not part of the Debian deployment | No purge or disable actions |
 

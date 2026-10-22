@@ -3,22 +3,26 @@ name: awtserver CLI prototype
 on:
   push:
     paths:
+      - "awtserver"
       - "awtserver.py"
       - "awtserver_cron.py"
       - "awtserver_tui.py"
-      - "tests/test_awtserver_cli.py"
-      - "tests/test_awtserver_cron.py"
-      - "tests/test_awtserver_tui.py"
+      - "awtserver_docs.py"
+      - "awtserver_installer.py"
+      - "tests/test_awtserver*.py"
+      - "docs/quick/**"
       - "docs/awtserver-cli.md"
       - ".github/workflows/awtserver-cli.yml"
   pull_request:
     paths:
+      - "awtserver"
       - "awtserver.py"
       - "awtserver_cron.py"
       - "awtserver_tui.py"
-      - "tests/test_awtserver_cli.py"
-      - "tests/test_awtserver_cron.py"
-      - "tests/test_awtserver_tui.py"
+      - "awtserver_docs.py"
+      - "awtserver_installer.py"
+      - "tests/test_awtserver*.py"
+      - "docs/quick/**"
       - "docs/awtserver-cli.md"
       - ".github/workflows/awtserver-cli.yml"
 
@@ -32,8 +36,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Python syntax and unit tests
         run: |
-          python3 -m py_compile awtserver.py awtserver_cron.py awtserver_tui.py tests/test_awtserver_cli.py tests/test_awtserver_cron.py tests/test_awtserver_tui.py
+          python3 -m py_compile awtserver awtserver.py awtserver_cron.py awtserver_tui.py awtserver_docs.py awtserver_installer.py tests/test_awtserver*.py
           python3 -m unittest discover -s tests -p 'test_awtserver*.py' -v
+          python3 awtserver docs
+          python3 awtserver docs remote-apps
+          python3 awtserver installer
           python3 awtserver.py profiles
           python3 awtserver.py plan
           python3 awtserver.py install --profiles base storage

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import curses
 import json
+import re
 import sys
+import textwrap
 
 import awtserver
 import awtserver_cron
@@ -69,6 +71,33 @@ def get_details(action: str) -> str:
     raise ValueError("Unknown TUI action")
 
 
+def detail_lines(detail: str, columns: int, *, markdown: bool = False) -> list[str]:
+    """Wrap long guides rather than silently hiding right-hand text on SSH."""
+    result = []
+    width = max(14, columns - 6)
+    for line in detail.splitlines():
+        if markdown:
+            # Links remain accessible through the complete CLI guide. A narrow
+            # TUI should show readable instructions, not opaque long URLs.
+            line = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)
+            line = line.replace("**", "").replace(chr(96), "")
+            line = line.lstrip("#").lstrip() if line.startswith("#") else line
+        if not line.strip():
+            result.append("")
+            continue
+        match = re.match(r"^(\s*(?:\d+\.\s+|[-*]\s+))", line)
+        initial = match.group(0) if match else ""
+        rest = line[len(initial):]
+        lines = textwrap.wrap(rest, width=max(10, width - len(initial)),
+                              break_long_words=True, break_on_hyphens=False)
+        if not lines:
+            result.append(initial)
+        else:
+            result.append(initial + lines[0])
+            result.extend(" " * len(initial) + part for part in lines[1:])
+    return result or ["(empty)"]
+
+
 def safe_line(screen, row: int, col: int, text: str, width: int,
               attribute: int = 0) -> None:
     height, columns = screen.getmaxyx()
@@ -90,6 +119,7 @@ def run_ui(screen) -> None:
     stack: list[tuple[str, int]] = [("root", 0)]
     detail_title = ""
     detail = ""
+    markdown_detail = False
     scroll = 0
 
     while True:
@@ -108,7 +138,7 @@ def run_ui(screen) -> None:
         safe_line(screen, 1, 2, "CLI-first | read-only navigation", width - 4)
 
         if detail_title:
-            lines = detail.splitlines() or ["(empty)"]
+            lines = detail_lines(detail, width, markdown=markdown_detail)
             safe_line(screen, 3, 2, detail_title, width - 4, curses.A_BOLD)
             count = max(1, height - 7)
             scroll = max(0, min(scroll, max(0, len(lines) - count)))
@@ -133,7 +163,7 @@ def run_ui(screen) -> None:
             return
         if detail_title:
             if key in (27, ord("h"), curses.KEY_BACKSPACE):
-                detail_title, detail, scroll = "", "", 0
+                detail_title, detail, scroll, markdown_detail = "", "", 0, False
             elif key in (curses.KEY_DOWN, ord("j")):
                 scroll += 1
             elif key in (curses.KEY_UP, ord("k")):
@@ -161,6 +191,7 @@ def run_ui(screen) -> None:
                 stack.append((action.split(":", 1)[1], 0))
                 continue
             detail_title = label
+            markdown_detail = action.startswith("doc:")
             scroll = 0
             try:
                 detail = get_details(action)

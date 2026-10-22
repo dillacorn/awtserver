@@ -84,3 +84,16 @@ jobs:
               print(f"Checking profile {name}: {packages}", flush=True)
               run(["apt-get", "--simulate", "--no-remove", "install", *packages], check=True)
           PY
+
+  debian12-omv-guard-simulation:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bookworm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate complete sandbox suite with simulated OMV installed
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-remove --no-install-recommends python3 util-linux
+          mkdir -p /etc/openmediavault
+          AWTSERVER_SANDBOX_TEST=1 runuser -u nobody -- python3 -B migration/debian/host_tui_sandbox_test.py

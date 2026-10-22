@@ -44,6 +44,16 @@ Sync refuses existing unmanaged cron content, symlinked target files, unsafe cro
 
 Current limitations: five numeric cron fields, non-root job execution, strict script locations, no automatic user provisioning, no job-specific environment variables, no overlap locking or failure alert routing. Cron tasks missed while the VM is powered off are not caught up. **Cron activation remains experimental and is not authorized for the existing OMV server.**
 
+## Read-only TUI preview
+
+With an interactive SSH or local TTY (at least 30 columns wide and 12 lines high):
+
+```bash
+python3 awtserver_tui.py
+```
+
+The early terminal UI uses **arrow keys or j/k** to select options, **Enter** to open details, **Esc or h** to return, and **q** to quit. It displays the same diagnostics, package profiles, default installation plan, stored job state and managed cron preview as the CLI. It does not write files, launch installers, or activate jobs. Window resizing and a small-terminal warning are supported. Configuration selection and commit/apply workflows remain CLI-only while their safety gates are tested.
+
 ## Planned expansion
 
 The CLI will be the noninteractive backend for a later raw-key, arrow-key **TUI inspired by [smtty](https://github.com/dillacorn/smtty)**. The eventual menu can show service state, choose install profiles, edit and toggle scheduled tasks, review changes, and guide individual service setup. TUI navigation must never become necessary to use the CLI.

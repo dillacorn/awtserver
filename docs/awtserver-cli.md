@@ -26,6 +26,16 @@ All commands above are read-only. `install` without `--apply` prints only a plan
 
 The package profiles are independent. The default includes only `base`, `access`, `storage` and `backup`. The `sharing` profile (Samba), `ftp`, `ups`, `docker` and `scheduler` profiles are opt-in. Docker uses Debian's `docker.io` and `docker-compose` packages for this isolated prototype; do **not** mix them with an installation from Docker's official repository.
 
+## Storage, SnapRAID and recovery
+
+- `awtserver storage usage --threshold 80` warns when a filesystem exceeds 80%.
+- `awtserver storage disks|pools|tools` reports devices, mergerfs pools and optional disk TUIs.
+- `awtserver snapraid status|plan|enable|disable|sync` provides VM-only AIO scheduling (not a SnapRAID engine).
+- `awtserver monitor stats|usage|check|notify` provides status, missing-mount detection and optional guarded mail.
+- `awtserver backup plan|snapshot|restore-plan` provides UUID-verified, encrypted restic OS backup planning for a separately initialized USB repository.
+
+More: `awtserver docs mergerfs`, `snapraid`, `alerts`, `recovery-usb`, `smart-ups`. Every write remains a separate Debian 13 disposable-VM operation; real OMV is not modified.
+
 ## Job planning
 
 ```bash

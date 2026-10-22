@@ -264,9 +264,9 @@ def main(argv: list[str] | None = None) -> int:
                     apply_guard(args.confirm_vm)
                     # Resolve package candidates without touching APT configuration.
                     subprocess.run(["apt-get", "update"], check=True)
-                    subprocess.run(["apt-get", "--assume-no", "--simulate", "install",
+                    subprocess.run(["apt-get", "--simulate", "--no-remove", "install",
                                     *plan["packages"]], check=True)
-                    subprocess.run(["apt-get", "install", "-y", *plan["packages"]], check=True)
+                    subprocess.run(["apt-get", "install", "-y", "--no-remove", *plan["packages"]], check=True)
         elif args.command == "jobs":
             jobs_command(args)
     except (ValueError, OSError, subprocess.CalledProcessError, KeyError, json.JSONDecodeError) as error:

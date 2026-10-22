@@ -16,7 +16,7 @@ From a checked-out feature branch:
 python3 awtserver.py doctor
 python3 awtserver.py profiles
 python3 awtserver.py plan
-python3 awtserver.py plan --profiles base access storage ftp ups docker scheduler
+python3 awtserver.py plan --profiles base access storage ftp ups docker-debian scheduler
 python3 awtserver.py install --profiles base storage
 ```
 

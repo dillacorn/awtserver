@@ -14,9 +14,17 @@ awtserver collects reusable scripts, Docker Compose configurations, and maintena
 | **Security** | SSH, Fail2ban, firewall |
 | **Maintenance** | SMART, UPS shutdown, backups, scheduled updates and alerts |
 
-## Development preview
+## Install
 
-Run `python3 awtserver` for the compact TUI or `python3 awtserver docs` for short categorized setup guides. A VM-only command installer is in development. See [CLI/TUI setup](docs/awtserver-cli.md), [Tailscale per-app steps](docs/quick/remote-apps.md), [Android Auto Rules](docs/quick/android-auto.md), and the [implementation checklist](docs/IMPLEMENTATION.md). **Not production-ready.** Storage and health menus now include read-only disk/mergerfs inspection, optional safe disk browsers, SnapRAID AIO scheduling previews, and USB recovery/email-monitor planning.
+On Debian 12/13, install the **awtserver command only**:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dillacorn/awtserver/main/install.sh | sudo bash
+```
+
+Then run `awtserver` (TUI), `sudo awtserver update` or `sudo awtserver uninstall`. Installer changes only its own program files. **Server configuration remains experimental and write-blocked outside disposable Debian 13 VMs**, including on OMV. Review [installation, updates and uninstall safety](docs/awtserver-cli.md) before running the remote script.
+
+Quick guides: [per-app Tailscale](docs/quick/remote-apps.md) · [Android Auto Rules](docs/quick/android-auto.md) · [implementation progress](docs/IMPLEMENTATION.md).
 
 ## Documentation
 

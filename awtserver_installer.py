@@ -27,6 +27,10 @@ FILES = (
     "awtserver_cron.py",
     "awtserver_docs.py",
     "awtserver_installer.py",
+    "awtserver_storage.py",
+    "awtserver_snapraid.py",
+    "awtserver_backup.py",
+    "awtserver_monitor.py",
 )
 MARKER = ".awtserver-managed-v1"
 

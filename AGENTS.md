@@ -10,6 +10,8 @@ Applies to this repository, including `docker/` and OMV service documentation.
 - Preserve persistent Docker volumes, databases, configuration, secrets, filesystem ownership, networking, DNS, and backup data. Never replace, prune, reset, migrate, or delete live data based only on example paths; require appropriate host evidence, safety checks, and explicit permission for destructive operations.
 - `docker/pihole/` documents Pi-hole, Quad9/DNS transport, Tailscale/DNS routing, profile management (`pihm`), and optional Arachnidium integrations. Preserve live DNS availability and profile separation; never assume container, network, or configuration names without checking.
 - Updates sourced from `main` may be fetched by host-side installation/update helpers even without a GitHub Release. Document this distinction; do not assume adding a release tag alone deploys any code.
+- The `install.sh` bootstrap and `awtserver_installer.py` manage **only** `/opt/awtserver` and `/usr/local/bin/awtserver`. Debian 12/OMV can install this **command only**; `awtserver.apply_guard` remains a separate hard stop for service/package/cron/storage writes outside disposable Debian 13 VMs. Never treat program installation as permission to modify the NAS.
+- During update/uninstall, reject modified/foreign files and symlinks in the managed program directory; do not remove arbitrary data or change service configurations. Preserve full details in `docs/awtserver-cli.md`.
 - Do not commit credentials, environment secrets, Tailscale auth data, private keys, passwords, database copies, or sensitive device-specific output.
 
 ## User-facing documentation

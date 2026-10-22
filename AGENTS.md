@@ -29,6 +29,7 @@ The full operational guides remain available even when a service README is short
 
 | Topic | Detailed sources |
 | --- | --- |
+| **awtserver quick navigation** | [Tailscale manual steps](docs/quick/remote-apps.md), [Android Auto Rules](docs/quick/android-auto.md), [Pi-hole DNS](docs/quick/dns.md), [CLI and TUI](docs/awtserver-cli.md); quick docs are human-readable summaries, not authoritative deployment configuration. Keep detailed host-specific safeguards in existing OPERATIONS/NETWORKING guides. |
 | **awtserver CLI prototype** | [VM-only CLI commands and restrictions](docs/awtserver-cli.md), [OMV feature map](docs/feature-map.md), [implementation and validation gates](docs/IMPLEMENTATION.md); `awtserver.py` contains experimental package profiles and declarative job state. `awtserver_cron.py` can synchronize only an owned `/etc/cron.d/awtserver` file on a VM under explicit guards; job enable alone does not activate cron. Production adoption, storage, network or OMV removal are not implemented. |
 | **Debian build / server recovery** | [Inventory and historical transition plan](migration/debian/OPERATIONS.md), [restore requirements](migration/debian/restore-manifest.md), [host findings](migration/debian/host-findings-2026-10-20.md) |
 | **Docker services** | [Service index](docker/README.md), [historical Docker commands](docker/LEGACY-NOTES.md); inspect each service's Compose files and host runtime |

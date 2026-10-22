@@ -160,6 +160,13 @@ class FullNavigationTests(unittest.TestCase):
                     self.assertIn("--no-spawn-shell", argv)
                 else:
                     self.assertIn("-rr", argv)
+        with patch.dict(tui.os.environ, {"AWTSERVER_TUI_TEST_MODE": "1"}), \
+             patch.object(tui.subprocess, "run",
+                          side_effect=AssertionError("test mode launched tool")):
+            self.assertIn("disabled during safe TUI testing",
+                          tui.launch_tool("gdu", FakeScreen([])))
+            self.assertIn("disabled during safe TUI testing",
+                          tui.launch_tool("ncdu", FakeScreen([])))
         with patch.object(tui.os, "geteuid", return_value=0), \
              patch.object(tui.subprocess, "run",
                           side_effect=AssertionError("root launched tool")):

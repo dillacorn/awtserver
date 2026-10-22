@@ -51,7 +51,7 @@ class GuideTests(unittest.TestCase):
     def test_short_tui_navigation_and_guide_loading(self):
         root = tui.menu_for("root")
         self.assertEqual([item[0] for item in root],
-                         ["Status", "Packages", "Schedules", "Guides", "Quit"])
+                         ["Status", "Storage", "SnapRAID", "Maintenance", "Packages", "Guides", "Quit"])
         self.assertIn(("Remote access", "menu:guide:Remote access"),
                       tui.menu_for("guides"))
         self.assertIn(("Docker application checklist", "doc:remote-apps"),

@@ -8,4 +8,4 @@
 
 **Do not automatically apply repository examples on a running host.** A lost overlay can silently remove the remote Pi-hole DNS listener.
 
-Details: [Pi-hole setup](../../docker/pihole/SETUP.md) · [DNS recovery](../../docker/pihole/DNS-RECOVERY.md).
+Details: [Pi-hole setup](https://github.com/dillacorn/awtserver/blob/main/docker/pihole/SETUP.md) · [DNS recovery](https://github.com/dillacorn/awtserver/blob/main/docker/pihole/DNS-RECOVERY.md).

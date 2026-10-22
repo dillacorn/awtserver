@@ -50,15 +50,15 @@ class ScheduleReviewTests(unittest.TestCase):
         for field in ("command", "user", "password", "source", "destination", "host"):
             corrupted = dict(items[0], **{field: "private"})
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, "unsafe"):
-                schedules.validate_inventory([corrupted])
+                schedules.validate_inventory({"source": "test", "status": "historical-audit", "jobs": [corrupted]})
 
     def test_prevent_arbitrary_cron_macro_and_invalid_type(self):
         _, items = schedules.load_inventory()
         for schedule in ("@reboot", "60 3 * * *", "0 3 * * *\necho bad", "0 3 * * 8"):
             with self.subTest(schedule=schedule), self.assertRaises(ValueError):
-                schedules.validate_inventory([dict(items[0], schedule=schedule)])
+                schedules.validate_inventory({"source": "test", "status": "historical-audit", "jobs": [dict(items[0], schedule=schedule)]})
         with self.assertRaises(ValueError):
-            schedules.validate_inventory([dict(items[0], enabled="false")])
+            schedules.validate_inventory({"source": "test", "status": "historical-audit", "jobs": [dict(items[0], enabled="false")]})
 
     def test_sunday_seven_and_weekly_unresolved(self):
         when = schedules.next_occurrences("45 5 * * 7", date(2027, 1, 15), 4)

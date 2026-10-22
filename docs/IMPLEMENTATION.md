@@ -32,7 +32,9 @@ This is the development coverage checklist, not a claim that a complete installe
 - [ ] 80% alert schedule, deduplication, clear/recovery notification, SMTP transport verification and test mail delivery
 - [ ] Identify real NAS AIO schedule/settings, script owner and USB backup mount by sanitized read-only live probe
 - [x] Dated October 22 OMV capability report: 7 jobs (3 active), 8 relevant timers, Docker CE, Borg/Timeshift/rsync, 1 unmounted USB disk
-- [ ] Discover exact enabled job categories/times; separate active backup schedules and verify Restic/Borg/Timeshift behavior rather than assuming any installed package is used
+- [x] October 22 read-only job audit: three enabled custom jobs, two enabled rsync jobs, four disabled custom jobs; sanitized schedule inventory and overlap reviewer
+- [ ] Verify backup and SnapRAID durations, mutual exclusion, weekly cron expansion and rsync destination integrity before activating migrated jobs
+- [ ] Verify installed Borg/Timeshift and actual restore success; package presence does not establish backups
 - [ ] All selected Docker services from the current OMV inventory, validated independently
 
 ## C. Scheduling, CLI and terminal UI

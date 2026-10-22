@@ -23,6 +23,9 @@ def main(argv: list[str] | None = None) -> int:
     if args[0] == "tui":
         import awtserver_tui as tui
         return tui.main()
+    if args[0] == "installer":
+        import awtserver_installer as installer
+        return installer.main(args[1:])
     return cli.main(args)
 
 

@@ -1,0 +1,31 @@
+name: awtserver CLI prototype
+
+on:
+  push:
+    paths:
+      - "awtserver.py"
+      - "tests/test_awtserver_cli.py"
+      - "docs/awtserver-cli.md"
+      - ".github/workflows/awtserver-cli.yml"
+  pull_request:
+    paths:
+      - "awtserver.py"
+      - "tests/test_awtserver_cli.py"
+      - "docs/awtserver-cli.md"
+      - ".github/workflows/awtserver-cli.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax and unit tests
+        run: |
+          python3 -m py_compile awtserver.py tests/test_awtserver_cli.py
+          python3 -m unittest discover -s tests -p 'test_awtserver_cli.py' -v
+          python3 awtserver.py profiles
+          python3 awtserver.py plan
+          python3 awtserver.py install --profiles base storage

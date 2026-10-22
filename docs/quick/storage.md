@@ -8,4 +8,4 @@
 
 **awtserver does not format, mount or initialize storage.**
 
-Details: [restore requirements](../../migration/debian/restore-manifest.md) · [existing host findings](../../migration/debian/host-findings-2026-10-20.md).
+Details: [restore requirements](https://github.com/dillacorn/awtserver/blob/main/migration/debian/restore-manifest.md) · [existing host findings](https://github.com/dillacorn/awtserver/blob/main/migration/debian/host-findings-2026-10-20.md).

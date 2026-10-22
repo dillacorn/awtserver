@@ -13,7 +13,7 @@
 | DNS / remote connectivity | Pi-hole, Quad9, Gluetun, host/sidecar Tailscale | Existing service documentation only |
 | Monitoring | smartmontools, SMART tests, email alerts, syslog | Package planning only |
 | Power protection | apcupsd configuration and verified shutdown thresholds | Package planning only; no UPS policy |
-| Jobs and maintenance | Cron or reviewed systemd timers, user scripts, alerts | Declarative cron schedules; no activation |
+| Jobs and maintenance | Cron or reviewed systemd timers, user scripts, alerts | Declarative schedules and VM-only managed cron synchronization; no production deployment |
 | Users / groups and ACLs | Native user/group tools, ownership, POSIX ACLs | Not implemented |
 | Notifications | SMTP/other explicitly configured sender, failures and thresholds | Not implemented |
 | Backups and recovery | rsync/Borg where justified, tested application restores | rsync package planning; no backups performed |

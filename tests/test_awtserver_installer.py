@@ -2,6 +2,7 @@
 import contextlib
 import io
 import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -70,6 +71,11 @@ class InstallerTests(unittest.TestCase):
                 self.assertEqual((dest / "awtserver").stat().st_mode & 0o777, 0o755)
                 self.assertEqual((dest / "awtserver.py").stat().st_mode & 0o777, 0o644)
                 self.assertEqual((dest / installer.MARKER).is_file(), True)
+                launched = subprocess.run([sys.executable, str(command),
+                                          "docs", "android-auto"],
+                                         capture_output=True, text=True, check=False)
+                self.assertEqual(launched.returncode, 0, launched.stderr)
+                self.assertIn("Tailscale Auto Rules", launched.stdout)
                 with self.assertRaisesRegex(ValueError, "Existing"):
                     installer.install(dest=dest, command=command)
                 self.assertTrue((dest / installer.MARKER).exists())

@@ -27,10 +27,14 @@ PROFILES = {
     "storage": ("snapraid", "mergerfs", "smartmontools"),
     "ftp": ("proftpd-core",),
     "ups": ("apcupsd",),
-    "docker": ("docker.io", "docker-compose"),
+    # Debian archive Docker is an explicit ALTERNATIVE, never auto-selected
+    # for an existing Docker CE host. Official Docker APT setup is separate.
+    "docker-debian": ("docker.io", "docker-compose"),
     "scheduler": ("cron",),
     "sharing": ("samba",),
     "backup": ("rsync",),
+    "borg": ("borgbackup",),
+    "timeshift": ("timeshift",),
     "recovery": ("restic",),
     "tooling": ("gdu", "ncdu", "duf", "btop", "util-linux"),
     "snapraid-aio-deps": ("bc", "jq", "python3-markdown", "util-linux"),
@@ -41,6 +45,8 @@ USER_RE = re.compile(r"[a-z_][a-z0-9_-]{0,31}\Z")
 
 
 def packages_for(profiles: list[str]) -> list[str]:
+    if "docker" in profiles:
+        raise ValueError("Ambiguous Docker profile: choose docker-debian explicitly; Docker CE setup is not automated")
     invalid = sorted(set(profiles) - PROFILES.keys())
     if invalid:
         raise ValueError("Unknown profile(s): " + ", ".join(invalid))

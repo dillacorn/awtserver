@@ -8,7 +8,10 @@ This is the development coverage checklist, not a claim that a complete installe
 - [x] Root/VM/Debian-13 guarded package install; APT removals prohibited
 - [x] Offline tests and Debian 13 APT package-resolution CI
 - [x] Actual Debian 12/OMV **read-only CLI** compatibility: 11 Python syntax checks and 10/10 integration checks passed (no permanent installation)
-- [ ] Read-only interactive TUI SSH test: navigation, narrow terminal, missing optional tools, keyboard exit and no host writes
+- [x] Automated fake-curses traversal of **every** TUI menu leaf, keyboard Back/Quit/scroll, minimum screen and guarded external disk-tool launches
+- [x] Unprivileged CI tests of actual temporary job-state, cron-file, and installer writes, rollback/refusal and unchanged real write guards
+- [ ] Actual Debian 12/OMV **host** unprivileged TUI-backend and temp-write suite (operator run pending)
+- [ ] Actual interactive SSH/TTY screen rendering and navigation (human visual validation)
 - [ ] Clean Debian 13 VM: full package installation, service startup and reboot
 - [x] Explicit `docker-debian` alternative instead of ambiguous provider-independent Docker install
 - [ ] **Implement and validate official Docker CE/Compose plugin** as the default parity path for the existing OMV host; repository signing, conflict checks, firewall and idempotent upgrade behavior

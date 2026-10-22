@@ -59,7 +59,7 @@ def main() -> int:
     with contextlib.redirect_stdout(capture), contextlib.redirect_stderr(capture):
         suite = unittest.defaultTestLoader.discover(
             start_dir=str(root / "tests"), pattern="test_awtserver*.py",
-            top_level_dir=str(root),
+            top_level_dir=str(root / "tests"),
         )
         result = unittest.TextTestRunner(stream=capture, verbosity=1).run(suite)
     print(f"Unit / sandbox tests: {result.testsRun} run; "

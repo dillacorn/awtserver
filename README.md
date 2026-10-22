@@ -14,9 +14,9 @@ awtserver collects reusable scripts, Docker Compose configurations, and maintena
 | **Security** | SSH, Fail2ban, firewall |
 | **Maintenance** | SMART, UPS shutdown, backups, scheduled updates and alerts |
 
-## Prototype CLI
+## Development preview
 
-Experimental Debian 13 VM-only package profiles and declarative job scheduling are on the development branch. See [awtserver CLI and TUI](docs/awtserver-cli.md), the [OMV feature map](docs/feature-map.md), and the [implementation checklist](docs/IMPLEMENTATION.md). **VM-only cron synchronization is experimental; no production installer or scheduler deployment is available.**
+Run `python3 awtserver` for the compact TUI or `python3 awtserver docs` for short categorized setup guides. A VM-only command installer is in development. See [CLI/TUI setup](docs/awtserver-cli.md), [Tailscale per-app steps](docs/quick/remote-apps.md), [Android Auto Rules](docs/quick/android-auto.md), and the [implementation checklist](docs/IMPLEMENTATION.md). **Not production-ready.**
 
 ## Documentation
 

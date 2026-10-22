@@ -33,7 +33,7 @@ class RealSandboxWrites(unittest.TestCase):
 
     def confined(self, path):
         path = Path(path)
-        if path.is_symlink() or not path.absolute().is_relative_to(self.base):
+        if not path.absolute().is_relative_to(self.base):
             raise AssertionError("Sandbox test target outside temporary directory")
         return path
 

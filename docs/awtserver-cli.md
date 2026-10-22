@@ -6,34 +6,34 @@
 
 From a checked-out feature branch:
 
-\`\`\`bash
+```bash
 python3 awtserver.py doctor
 python3 awtserver.py profiles
 python3 awtserver.py plan
 python3 awtserver.py plan --profiles base access storage ftp ups docker scheduler
 python3 awtserver.py install --profiles base storage
-\`\`\`
+```
 
-All commands above are read-only. \`install\` without \`--apply\` prints only a plan; no APT calls are made.
+All commands above are read-only. `install` without `--apply` prints only a plan; no APT calls are made.
 
-**VM-only package experiment:** After taking a VM snapshot and reviewing the selected package plan, running as root inside a **fresh Debian 13 VM**, a deliberate \`install --apply --confirm-vm\` performs APT index refresh, an APT simulated install and then installs the selected Debian packages. The preflight rejects OMV, unsupported Debian versions, non-root calls and machines not detected as virtual machines. **APT package installation can automatically start daemons** even though awtserver does not configure or enable services itself. Do not point this at a live or reused VM with important data.
+**VM-only package experiment:** After taking a VM snapshot and reviewing the selected package plan, running as root inside a **fresh Debian 13 VM**, a deliberate `install --apply --confirm-vm` performs APT index refresh, an APT simulated install and then installs the selected Debian packages. The preflight rejects OMV, unsupported Debian versions, non-root calls and machines not detected as virtual machines. **APT package installation can automatically start daemons** even though awtserver does not configure or enable services itself. Do not point this at a live or reused VM with important data.
 
-The package profiles are independent. The default includes only \`base\`, \`access\`, \`storage\` and \`backup\`. The \`sharing\` profile (Samba), \`ftp\`, \`ups\`, \`docker\` and \`scheduler\` profiles are opt-in. Docker uses Debian's \`docker.io\` and \`docker-compose\` packages for this isolated prototype; do **not** mix them with an installation from Docker's official repository.
+The package profiles are independent. The default includes only `base`, `access`, `storage` and `backup`. The `sharing` profile (Samba), `ftp`, `ups`, `docker` and `scheduler` profiles are opt-in. Docker uses Debian's `docker.io` and `docker-compose` packages for this isolated prototype; do **not** mix them with an installation from Docker's official repository.
 
 ## Job planning
 
-\`\`\`bash
+```bash
 python3 awtserver.py jobs list
 python3 awtserver.py jobs add --name backups --schedule "15 2 * * *" --user backup --script /usr/local/libexec/awtserver-jobs/backup
 python3 awtserver.py jobs enable --name backups
 python3 awtserver.py jobs disable --name backups
-\`\`\`
+```
 
-**Important:** These are **declarative schedule previews only**. An \`enabled\` flag does **not** install or start a cron job. The CLI does not execute any scheduled script.
+**Important:** These are **declarative schedule previews only**. An `enabled` flag does **not** install or start a cron job. The CLI does not execute any scheduled script.
 
-On a disposable Debian 13 VM only, \`--apply --confirm-vm\` saves the desired state at \`/var/lib/awtserver/jobs.json\` (private, mode 0600). It still does not touch \`/etc/cron*\` or systemd timers. The \`jobs remove\` action removes only the named entry from this private state.
+On a disposable Debian 13 VM only, `--apply --confirm-vm` saves the desired state at `/var/lib/awtserver/jobs.json` (private, mode 0600). It still does not touch `/etc/cron*` or systemd timers. The `jobs remove` action removes only the named entry from this private state.
 
-Input limits are deliberate: five numeric cron fields, lowercase job names, a non-root account name, and one script path directly under \`/usr/local/libexec/awtserver-jobs/\`. Executable ownership, user accounts, schedules, lock handling, notifications, and safe cron or systemd deployment will require separate validation before any job-activation feature is added.
+Input limits are deliberate: five numeric cron fields, lowercase job names, a non-root account name, and one script path directly under `/usr/local/libexec/awtserver-jobs/`. Executable ownership, user accounts, schedules, lock handling, notifications, and safe cron or systemd deployment will require separate validation before any job-activation feature is added.
 
 ## Planned expansion
 
@@ -43,10 +43,10 @@ Actual storage mounts, SnapRAID parity configurations, existing array discovery,
 
 ## Validate
 
-\`\`\`bash
+```bash
 python3 -m py_compile awtserver.py tests/test_awtserver_cli.py
 python3 -m unittest discover -s tests -p 'test_awtserver_cli.py' -v
 python3 awtserver.py plan
-\`\`\`
+```
 
 These are static and offline tests, not a verified clean Debian VM installation. Validate packages with a real disposable Debian 13 VM before broadening installation support.

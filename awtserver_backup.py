@@ -9,6 +9,7 @@ import argparse
 import json
 from pathlib import Path
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -95,18 +96,59 @@ def snapshot(mount: str, uuid: str, password_path: Path) -> None:
                     "snapshots", "--json"], check=True, stdout=subprocess.DEVNULL)
 
 
+def restore_stage(mount: str, uuid: str, password_path: Path,
+                  snapshot_id: str = "latest", name: str = "recovery") -> Path:
+    """VM-only restore to a fresh, private, non-root staging directory."""
+    apply_guard(True)
+    if not shutil.which("restic"):
+        raise ValueError("restic executable unavailable")
+    if not re.fullmatch(r"(?:latest|[a-f0-9]{8,64})", snapshot_id):
+        raise ValueError("Invalid restic snapshot identifier")
+    if not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", name):
+        raise ValueError("Invalid staging name")
+    target = backup_target(mount, uuid)
+    secrets_file(password_path)
+    repo = Path(target["repository"])
+    if repo.is_symlink() or not repo.is_dir() or not (repo / "config").is_file():
+        raise ValueError("Repository missing or unsafe")
+    if (repo / "config").is_symlink():
+        raise ValueError("Repository config is a symlink")
+    parent = Path("/var/lib/awtserver/recovery-staging")
+    if parent.is_symlink():
+        raise ValueError("Unsafe staging directory")
+    parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    st = parent.lstat()
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or st.st_mode & 0o077:
+        raise ValueError("Staging directory must be root-owned mode 0700")
+    staging = parent / name
+    if os.path.lexists(staging):
+        raise ValueError("Staging target already exists; no overwrites")
+    staging.mkdir(mode=0o700)
+    try:
+        subprocess.run(["restic", "-r", str(repo), "--password-file",
+                        str(password_path), "restore", snapshot_id,
+                        "--target", str(staging)], check=True)
+    except Exception:
+        # Preserve the partial directory for explicit forensic review.
+        raise
+    return staging
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="awtserver backup",
                                      description="VM-only guarded encrypted OS backup")
     sub = parser.add_subparsers(dest="action", required=True)
-    for action in ("plan", "snapshot", "restore-plan"):
+    for action in ("plan", "snapshot", "restore-plan", "restore-stage"):
         p = sub.add_parser(action)
         p.add_argument("--mount", required=True)
         p.add_argument("--uuid", required=True)
-        if action == "snapshot":
+        if action in ("snapshot", "restore-stage"):
             p.add_argument("--password-file", required=True)
             p.add_argument("--apply", action="store_true")
             p.add_argument("--confirm-vm", action="store_true")
+        if action == "restore-stage":
+            p.add_argument("--snapshot", default="latest")
+            p.add_argument("--name", default="recovery")
     args = parser.parse_args(argv)
     try:
         plan = backup_plan(args.mount, args.uuid)
@@ -122,6 +164,16 @@ def main(argv: list[str] | None = None) -> int:
                 print("Snapshot command completed. Restore verification remains required.")
             else:
                 print("Preview only. No backup performed.")
+        elif args.action == "restore-stage":
+            print("Restore into a fresh private staging directory; never into the live OS.")
+            if args.apply:
+                if not args.confirm_vm:
+                    raise ValueError("--confirm-vm required")
+                target = restore_stage(args.mount, args.uuid, Path(args.password_file),
+                                       args.snapshot, args.name)
+                print("Restored into private staging:", target)
+            else:
+                print("Preview only. No files restored.")
     except (ValueError, OSError, subprocess.CalledProcessError,
             subprocess.TimeoutExpired) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

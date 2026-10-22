@@ -24,7 +24,7 @@ All commands above are read-only. `install` without `--apply` prints only a plan
 
 **VM-only package experiment:** After taking a VM snapshot and reviewing the selected package plan, running as root inside a **fresh Debian 13 VM**, a deliberate `install --apply --confirm-vm` performs APT index refresh, an APT simulated install and then installs the selected Debian packages. The preflight rejects OMV, unsupported Debian versions, non-root calls and machines not detected as virtual machines. **APT package installation can automatically start daemons** even though awtserver does not configure or enable services itself. Do not point this at a live or reused VM with important data.
 
-The package profiles are independent. The default includes only `base`, `access`, `storage` and `backup`. The `sharing` profile (Samba), `ftp`, `ups`, `docker` and `scheduler` profiles are opt-in. Docker uses Debian's `docker.io` and `docker-compose` packages for this isolated prototype; do **not** mix them with an installation from Docker's official repository.
+The package profiles are independent. The default includes only `base`, `access`, `storage` and `backup`. The `sharing` (Samba), `ftp`, `ups`, `scheduler`, `borg`, `timeshift` and `docker-debian` profiles are opt-in. **Docker CE is confirmed on the existing OMV host.** `docker-debian` is explicitly the *alternative Debian archive provider* (`docker.io`/`docker-compose`), not a migration default. Official Docker CE + Compose plugin provisioning is **not implemented**; it needs a separate reviewed repository setup. Never automatically switch providers or mix their packages.
 
 ## Storage, SnapRAID and recovery
 

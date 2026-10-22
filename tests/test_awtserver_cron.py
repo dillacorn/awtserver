@@ -1,6 +1,7 @@
 """Offline cron render/activation tests; no actual /etc/cron.d writes."""
 import contextlib
 from pathlib import Path
+from types import SimpleNamespace
 import stat
 import tempfile
 import unittest
@@ -72,14 +73,11 @@ class CronRenderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "jobs"
             path.write_text("safe")
-            with patch.object(cron.Path, "lstat") as mock_stat:
-                s = path.stat()
-                mock_stat.return_value = s
-                # Current CI user should not be root; no reliance on actual UID.
-                with patch.object(cron, "_checked_root_path", wraps=cron._checked_root_path):
-                    with patch.object(s, "st_uid", 1000, create=True):
-                        with self.assertRaises(ValueError):
-                            cron._checked_root_path(path, directory=False)
+            with patch.object(cron.Path, "lstat",
+                              return_value=SimpleNamespace(st_mode=stat.S_IFREG | 0o644,
+                                                           st_uid=1000)):
+                with self.assertRaisesRegex(ValueError, "ownership"):
+                    cron._checked_root_path(path, directory=False)
 
 
 class CronApplyTests(unittest.TestCase):

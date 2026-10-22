@@ -74,6 +74,10 @@ python3 awtserver_tui.py
 
 The compact TUI has **Status / Packages / Schedules / Guides** categories. **Arrow keys or j/k** select and scroll, **Enter** opens details, **Esc or h** returns, and **q** quits. The Guides menu groups short documents under Remote access, Networking, Applications, Storage and Maintenance. It does not write files, install packages, or activate jobs. Window resizing and a small-terminal warning are supported. Configuration selection and commit/apply workflows remain CLI-only while their safety gates are tested.
 
+## Safe OMV test workflow
+
+For the existing Debian 12/OMV host, run only the pinned, unprivileged [TUI and temporary-write sandbox test](host-sandbox-validation.md). This test verifies **synthetic files** under private temporary directories, never actual cron/installer/backup writes. The CLI/TUI production write operations stay Debian 13 VM-only.
+
 ## Host inventory before OMV feature parity
 
 `migration/debian/feature_probe.py` is a separate, read-only probe for the current OMV host. It reports service/package/timer presence and job counts without displaying host IPs, disk identifiers, cron commands, emails or container names. Its output helps determine which features must be adopted; it is not a backup or permission to change the host.

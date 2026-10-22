@@ -20,6 +20,8 @@
 | Optional legacy features | ClamAV, Avahi, Chrony, collectd as justified by actual dependencies | Pending inspection |
 | OMV GUI/plugins | Not part of the Debian deployment | No purge or disable actions |
 
+See the [implementation and validation checklist](IMPLEMENTATION.md) for acceptance gates, the in-place OMV adoption plan and unresolved feature coverage.
+
 ## Design rules
 
 - **Fresh install first:** Start in a fresh Debian Stable VM, package and service dependencies separated into small profiles.

@@ -16,7 +16,7 @@ awtserver collects reusable scripts, Docker Compose configurations, and maintena
 
 ## Development preview
 
-Run `python3 awtserver` for the compact TUI or `python3 awtserver docs` for short categorized setup guides. A VM-only command installer is in development. See [CLI/TUI setup](docs/awtserver-cli.md), [Tailscale per-app steps](docs/quick/remote-apps.md), [Android Auto Rules](docs/quick/android-auto.md), and the [implementation checklist](docs/IMPLEMENTATION.md). **Not production-ready.**
+Run `python3 awtserver` for the compact TUI or `python3 awtserver docs` for short categorized setup guides. A VM-only command installer is in development. See [CLI/TUI setup](docs/awtserver-cli.md), [Tailscale per-app steps](docs/quick/remote-apps.md), [Android Auto Rules](docs/quick/android-auto.md), and the [implementation checklist](docs/IMPLEMENTATION.md). **Not production-ready.** Storage and health menus now include read-only disk/mergerfs inspection, optional safe disk browsers, SnapRAID AIO scheduling previews, and USB recovery/email-monitor planning.
 
 ## Documentation
 

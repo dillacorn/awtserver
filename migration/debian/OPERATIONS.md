@@ -244,8 +244,10 @@ one tool should own a given daemon's actual configuration.
 
 ## Safety limits
 
-- Do not run the installer or deletion tools during discovery. This project
-  currently contains **no executable deployment script**.
+- Do not run the production installer or deletion tools during discovery.
+  `awtserver.py` is an **experimental Debian 13 VM-only package-profile CLI**,
+  not a production deployment, host conversion, or data-restore script.
+  Its declarative jobs do not activate cron or systemd timers.
 - Never use inventory JSON as configuration, a disk restore manifest or a
   backup. The command deliberately does not capture secrets or contents.
 - No indiscriminate `rsync` of live Docker DBs or SnapRAID parity while

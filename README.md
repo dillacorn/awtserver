@@ -14,6 +14,10 @@ awtserver collects reusable scripts, Docker Compose configurations, and maintena
 | **Security** | SSH, Fail2ban, firewall |
 | **Maintenance** | SMART, UPS shutdown, backups, scheduled updates and alerts |
 
+## Prototype CLI
+
+Experimental Debian 13 VM-only package profiles and declarative job scheduling are on the development branch. See [awtserver CLI](docs/awtserver-cli.md) and the [OMV feature map](docs/feature-map.md). **No production installer or active cron job deployment is available.**
+
 ## Documentation
 
 - [Docker services](docker/README.md) — container configurations and service guides

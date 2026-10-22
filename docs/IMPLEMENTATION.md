@@ -17,7 +17,8 @@ This is the development coverage checklist, not a claim that a complete installe
 - [x] Explicit `docker-debian` alternative instead of ambiguous provider-independent Docker install
 - [ ] **Implement and validate official Docker CE/Compose plugin** as the default parity path for the existing OMV host; repository signing, conflict checks, firewall and idempotent upgrade behavior
 - [ ] Repeat install, update, interruption, failed dependency and rollback tests
-- [ ] Installer distribution/update/uninstall commands with pinned sources and version tracking
+- [x] Managed allowlist command install / SHA-pinned main update / guarded code-only uninstall with revision manifest
+- [ ] Real Debian 12/13 host installation, update interruption and rollback, and uninstall tested on isolated machines
 
 ## B. Native services and application parity
 

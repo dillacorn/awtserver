@@ -58,7 +58,7 @@ With an interactive SSH or local TTY (at least 30 columns wide and 12 lines high
 python3 awtserver_tui.py
 ```
 
-The early terminal UI uses **arrow keys or j/k** to select options, **Enter** to open details, **Esc or h** to return, and **q** to quit. It displays the same diagnostics, package profiles, default installation plan, stored job state and managed cron preview as the CLI. It does not write files, launch installers, or activate jobs. Window resizing and a small-terminal warning are supported. Configuration selection and commit/apply workflows remain CLI-only while their safety gates are tested.
+The compact TUI has **Status / Packages / Schedules / Guides** categories. **Arrow keys or j/k** select and scroll, **Enter** opens details, **Esc or h** returns, and **q** quits. The Guides menu groups short documents under Remote access, Networking, Applications, Storage and Maintenance. It does not write files, install packages, or activate jobs. Window resizing and a small-terminal warning are supported. Configuration selection and commit/apply workflows remain CLI-only while their safety gates are tested.
 
 ## Planned expansion
 

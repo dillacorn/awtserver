@@ -16,7 +16,7 @@ awtserver collects reusable scripts, Docker Compose configurations, and maintena
 
 ## Prototype CLI
 
-Experimental Debian 13 VM-only package profiles and declarative job scheduling are on the development branch. See [awtserver CLI](docs/awtserver-cli.md) and the [OMV feature map](docs/feature-map.md). **No production installer or active cron job deployment is available.**
+Experimental Debian 13 VM-only package profiles and declarative job scheduling are on the development branch. See [awtserver CLI](docs/awtserver-cli.md) and the [OMV feature map](docs/feature-map.md). **VM-only cron synchronization is experimental; no production installer or scheduler deployment is available.**
 
 ## Documentation
 

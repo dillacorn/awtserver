@@ -90,7 +90,8 @@ class RealSandboxWrites(unittest.TestCase):
                 self.confined(item)
                 if os.path.lexists(item):
                     raise ValueError("Existing installation or command")
-        with patch.object(installer.awtserver, "apply_guard", return_value=None), \
+        with patch.object(installer, "command_install_guard"), \
+             patch.object(installer, "checked_parent"), \
              patch.object(installer, "target_is_clear", side_effect=clear):
             installer.install(dest=target, command=command)
             self.assertTrue(command.is_symlink())

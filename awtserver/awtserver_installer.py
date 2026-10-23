@@ -24,7 +24,9 @@ import urllib.request
 import awtserver
 import awtserver_docs
 
-ROOT = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent
+# Repository source is nested; installed program files remain flat.
+ROOT = HERE if (HERE / "docs" / "quick").is_dir() else HERE.parent
 TARGET = Path("/opt/awtserver")
 LINK = Path("/usr/local/bin/awtserver")
 FILES = (
@@ -46,16 +48,31 @@ def file_list() -> list[Path]:
     ] + [Path("docs/examples/omv-schedules-2026-10-22.json")]
 
 
+def repository_file(relative: Path) -> Path:
+    """Map an installed filename to its location in the source repository."""
+    return relative if relative.parts[0] == "docs" else Path("awtserver") / relative
+
+
+def source_file(source: Path, relative: Path) -> Path:
+    """Allow a repository checkout or a flat verified download staging tree."""
+    nested = source / "awtserver"
+    if nested.is_symlink():
+        raise ValueError("Symlinked awtserver source path")
+    if relative.parts[0] != "docs" and nested.is_dir():
+        return nested / relative
+    return source / relative
+
+
 def check_source(source: Path = ROOT) -> None:
     if source.is_symlink() or not source.is_dir():
         raise ValueError("Missing or unsafe installer source directory")
     for relative in file_list():
-        path = source / relative
+        path = source_file(source, relative)
         if path.is_symlink() or not path.is_file():
             raise ValueError(f"Missing or unsafe installer source: {relative}")
         if not path.resolve().is_relative_to(source.resolve()):
             raise ValueError("Source escaped repository")
-    launcher = (source / "awtserver").read_text(encoding="utf-8")
+    launcher = source_file(source, Path("awtserver")).read_text(encoding="utf-8")
     if not launcher.startswith("#!/usr/bin/env python3"):
         raise ValueError("Unrecognized awtserver launcher")
 
@@ -91,7 +108,7 @@ def manifest_for(source: Path, revision: str = "local") -> dict:
         "format": FORMAT,
         "revision": revision,
         "files": {
-            str(p): hashlib.sha256((source / p).read_bytes()).hexdigest()
+            str(p): hashlib.sha256(source_file(source, p).read_bytes()).hexdigest()
             for p in file_list()
         },
     }
@@ -162,7 +179,7 @@ def write_stage(source: Path, parent: Path, revision: str = "local") -> Path:
             while ancestor != stage:
                 ancestor.chmod(0o755)
                 ancestor = ancestor.parent
-            shutil.copyfile(source / rel, path, follow_symlinks=False)
+            shutil.copyfile(source_file(source, rel), path, follow_symlinks=False)
             path.chmod(0o755 if str(rel) == "awtserver" else 0o644)
         marker = stage / MARKER
         marker.write_text(json.dumps(manifest_for(stage, revision), sort_keys=True) + "\n",
@@ -277,7 +294,7 @@ def fetch_main(source_root: Path) -> tuple[Path, str]:
     payload = _download(ARCHIVE + commit)
     source = source_root / "checkout"
     source.mkdir()
-    required = {str(p) for p in file_list()}
+    required = {str(repository_file(p)): p for p in file_list()}
     found = set()
     with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
         for entry in archive:
@@ -291,12 +308,12 @@ def fetch_main(source_root: Path) -> tuple[Path, str]:
                 raise ValueError("Unsafe downloaded source file")
             if entry.size > 1_000_000:
                 raise ValueError("Oversized downloaded source file")
-            target = source / relative
+            target = source / required[str(relative)]
             target.parent.mkdir(parents=True, exist_ok=True)
             with archive.extractfile(entry) as stream, target.open("xb") as output:
                 shutil.copyfileobj(stream, output)
             found.add(str(relative))
-    if found != required:
+    if found != set(required):
         raise ValueError("Downloaded source is incomplete")
     check_source(source)
     return source, commit

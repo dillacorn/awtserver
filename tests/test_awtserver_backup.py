@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch, call
 import sys
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "awtserver"))
 import awtserver_backup as b
 
 

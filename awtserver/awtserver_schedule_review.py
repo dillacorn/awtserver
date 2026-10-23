@@ -15,7 +15,9 @@ import sys
 CATEGORIES = frozenset(("backup", "snapraid", "docker-maintenance", "rsync"))
 KINDS = frozenset(("omv-custom", "omv-rsync"))
 TIMING_RE = re.compile(r"^(?:[0-9]{1,2}|\*)(?:[,-][0-9]{1,2})*(?:/[0-9]{1,2})?$")
-DEFAULT_AUDIT = Path(__file__).resolve().parent / "docs" / "examples" / "omv-schedules-2026-10-22.json"
+_CODE_DIR = Path(__file__).resolve().parent
+_SOURCE_ROOT = _CODE_DIR if (_CODE_DIR / "docs" / "examples").is_dir() else _CODE_DIR.parent
+DEFAULT_AUDIT = _SOURCE_ROOT / "docs" / "examples" / "omv-schedules-2026-10-22.json"
 
 
 def validate_inventory(data: object) -> list[dict]:

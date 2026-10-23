@@ -8,7 +8,8 @@ import argparse
 from pathlib import Path
 import sys
 
-ROOT = Path(__file__).resolve().parent
+_CODE_DIR = Path(__file__).resolve().parent
+ROOT = _CODE_DIR if (_CODE_DIR / "docs" / "quick").is_dir() else _CODE_DIR.parent
 CATALOG = (
     ("Remote access", "remote-tailscale", "Tailscale overview", "remote-tailscale.md"),
     ("Remote access", "remote-apps", "Docker application checklist", "remote-apps.md"),

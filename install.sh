@@ -34,7 +34,7 @@ PY
 
 for file in awtserver.py awtserver_docs.py awtserver_installer.py; do
     curl -fLsS --proto '=https' --tlsv1.2 \
-        "https://raw.githubusercontent.com/dillacorn/awtserver/${revision}/${file}" \
+        "https://raw.githubusercontent.com/dillacorn/awtserver/${revision}/awtserver/${file}" \
         -o "$workdir/$file"
 done
 

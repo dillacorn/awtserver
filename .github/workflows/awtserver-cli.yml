@@ -3,18 +3,8 @@ name: awtserver CLI prototype
 on:
   push:
     paths:
-      - "awtserver"
+      - "awtserver/**"
       - "install.sh"
-      - "awtserver.py"
-      - "awtserver_cron.py"
-      - "awtserver_tui.py"
-      - "awtserver_docs.py"
-      - "awtserver_installer.py"
-      - "awtserver_storage.py"
-      - "awtserver_snapraid.py"
-      - "awtserver_backup.py"
-      - "awtserver_monitor.py"
-      - "awtserver_schedule_review.py"
       - "docs/examples/**"
       - "tests/test_awtserver*.py"
       - "docs/quick/**"
@@ -23,18 +13,8 @@ on:
       - ".github/workflows/awtserver-cli.yml"
   pull_request:
     paths:
-      - "awtserver"
+      - "awtserver/**"
       - "install.sh"
-      - "awtserver.py"
-      - "awtserver_cron.py"
-      - "awtserver_tui.py"
-      - "awtserver_docs.py"
-      - "awtserver_installer.py"
-      - "awtserver_storage.py"
-      - "awtserver_snapraid.py"
-      - "awtserver_backup.py"
-      - "awtserver_monitor.py"
-      - "awtserver_schedule_review.py"
       - "docs/examples/**"
       - "tests/test_awtserver*.py"
       - "docs/quick/**"
@@ -53,19 +33,19 @@ jobs:
       - name: Python syntax and unit tests
         run: |
           bash -n install.sh
-          python3 -m py_compile awtserver awtserver.py awtserver_cron.py awtserver_tui.py awtserver_docs.py awtserver_installer.py awtserver_storage.py awtserver_snapraid.py awtserver_backup.py awtserver_monitor.py awtserver_schedule_review.py migration/debian/feature_probe.py migration/debian/host_tui_sandbox_test.py tests/test_awtserver*.py
+          python3 -m py_compile awtserver/awtserver awtserver/awtserver.py awtserver/awtserver_cron.py awtserver/awtserver_tui.py awtserver/awtserver_docs.py awtserver/awtserver_installer.py awtserver/awtserver_storage.py awtserver/awtserver_snapraid.py awtserver/awtserver_backup.py awtserver/awtserver_monitor.py awtserver/awtserver_schedule_review.py migration/debian/feature_probe.py migration/debian/host_tui_sandbox_test.py tests/test_awtserver*.py
           AWTSERVER_SANDBOX_TEST=1 AWTSERVER_TUI_TEST_MODE=1 python3 -m unittest discover -s tests -p 'test_awtserver*.py' -v
-          python3 awtserver docs
-          python3 awtserver docs remote-apps
-          python3 awtserver docs snapraid
-          python3 awtserver schedules review --min-gap 60
-          python3 awtserver storage tools
-          python3 awtserver snapraid plan
-          python3 awtserver monitor stats
-          python3 awtserver installer
-          python3 awtserver.py profiles
-          python3 awtserver.py plan
-          python3 awtserver.py install --profiles base storage
+          python3 awtserver/awtserver docs
+          python3 awtserver/awtserver docs remote-apps
+          python3 awtserver/awtserver docs snapraid
+          python3 awtserver/awtserver schedules review --min-gap 60
+          python3 awtserver/awtserver storage tools
+          python3 awtserver/awtserver snapraid plan
+          python3 awtserver/awtserver monitor stats
+          python3 awtserver/awtserver installer
+          python3 awtserver/awtserver.py profiles
+          python3 awtserver/awtserver.py plan
+          python3 awtserver/awtserver.py install --profiles base storage
 
   debian13-package-resolution:
     runs-on: ubuntu-latest
@@ -78,6 +58,8 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-remove --no-install-recommends python3
           python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "awtserver")
           from awtserver import PROFILES, packages_for
           from subprocess import run
           from pathlib import Path
@@ -102,19 +84,21 @@ jobs:
           runuser -u nobody -- env AWTSERVER_SANDBOX_TEST=1 AWTSERVER_TUI_TEST_MODE=1 PYTHONDONTWRITEBYTECODE=1 python3 -B migration/debian/host_tui_sandbox_test.py
       - name: Install command on disposable OMV-compatible container and uninstall
         run: |
-          python3 -B awtserver installer install --apply
+          python3 -B awtserver/awtserver installer install --apply
           python3 -B /usr/local/bin/awtserver version
           python3 -B - <<'PY'
           from pathlib import Path
           import shutil
           import tempfile
+          import sys
+          sys.path.insert(0, "awtserver")
           import awtserver_installer as manager
           with tempfile.TemporaryDirectory(prefix="awtserver-update-ci-") as tmp:
               src = Path(tmp)
               for rel in manager.file_list():
                   file = src / rel
                   file.parent.mkdir(parents=True, exist_ok=True)
-                  shutil.copyfile(manager.ROOT / rel, file)
+                  shutil.copyfile(manager.source_file(manager.ROOT, rel), file)
               doc = src / "docs/quick/android-auto.md"
               doc.write_text(doc.read_text() + "\nUpdated revision in disposable CI.\n")
               assert manager.update(src, revision="ci-update")

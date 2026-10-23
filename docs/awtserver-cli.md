@@ -21,7 +21,7 @@ This bootstrap gets a GitHub revision, fetches the source over HTTPS and install
 
 Unattended automatic updates are **not** enabled. You explicitly run `sudo awtserver update`. A GitHub `main` merge provides a new upstream revision; no GitHub Release is needed.
 
-From a checkout, `python3 awtserver` opens the read-only TUI or `python3 awtserver docs` displays the offline topics. Example: `python3 awtserver docs android-auto`. Full service-configuration and disk-recovery workflows remain experimental.
+From a checkout, `python3 awtserver` opens the read-only TUI or `python3 awtserver/awtserver docs` displays the offline topics. Example: `python3 awtserver/awtserver docs android-auto`. Full service-configuration and disk-recovery workflows remain experimental.
 
 
 
@@ -30,11 +30,11 @@ From a checkout, `python3 awtserver` opens the read-only TUI or `python3 awtserv
 From a checked-out feature branch:
 
 ```bash
-python3 awtserver.py doctor
-python3 awtserver.py profiles
-python3 awtserver.py plan
-python3 awtserver.py plan --profiles base access storage ftp ups docker-debian scheduler
-python3 awtserver.py install --profiles base storage
+python3 awtserver/awtserver.py doctor
+python3 awtserver/awtserver.py profiles
+python3 awtserver/awtserver.py plan
+python3 awtserver/awtserver.py plan --profiles base access storage ftp ups docker-debian scheduler
+python3 awtserver/awtserver.py install --profiles base storage
 ```
 
 All commands above are read-only. `install` without `--apply` prints only a plan; no APT calls are made.
@@ -55,15 +55,15 @@ More: `awtserver docs mergerfs`, `snapraid`, `alerts`, `recovery-usb`, `smart-up
 
 ## Historical schedule review
 
-`python3 awtserver schedules list` and `python3 awtserver schedules review --min-gap 60` inspect a **non-deployable October 22 OMV audit example**. This preserves only categories, schedules, enabled states and email flags. It flags possible short start gaps, not proven runtime overlap. TUI: Maintenance → OMV historical schedule audit. It never reads commands, runs scripts, activates cron or imports live OMV configuration.
+`python3 awtserver/awtserver schedules list` and `python3 awtserver/awtserver schedules review --min-gap 60` inspect a **non-deployable October 22 OMV audit example**. This preserves only categories, schedules, enabled states and email flags. It flags possible short start gaps, not proven runtime overlap. TUI: Maintenance → OMV historical schedule audit. It never reads commands, runs scripts, activates cron or imports live OMV configuration.
 
 ## Job planning
 
 ```bash
-python3 awtserver.py jobs list
-python3 awtserver.py jobs add --name backups --schedule "15 2 * * *" --user backup --script /usr/local/libexec/awtserver-jobs/backup
-python3 awtserver.py jobs enable --name backups
-python3 awtserver.py jobs disable --name backups
+python3 awtserver/awtserver.py jobs list
+python3 awtserver/awtserver.py jobs add --name backups --schedule "15 2 * * *" --user backup --script /usr/local/libexec/awtserver-jobs/backup
+python3 awtserver/awtserver.py jobs enable --name backups
+python3 awtserver/awtserver.py jobs disable --name backups
 ```
 
 **Recording and activating are separate operations.** `jobs add/enable/disable/remove` preview a desired state by default. On a disposable Debian 13 VM, their `--apply --confirm-vm` flags save only private state at `/var/lib/awtserver/jobs.json` (mode 0600). A job's `enabled` field is **desired state**, not proof that it runs.
@@ -71,8 +71,8 @@ python3 awtserver.py jobs disable --name backups
 A separate synchronization action is available:
 
 ```bash
-python3 awtserver.py jobs render
-python3 awtserver.py jobs sync
+python3 awtserver/awtserver.py jobs render
+python3 awtserver/awtserver.py jobs sync
 ```
 
 Both commands above are read-only previews. **Only in a disposable Debian 13 VM**, after provisioning a non-root execution account, writing a suitable root-owned executable script directly under `/usr/local/libexec/awtserver-jobs/`, and installing/running Debian's `cron` service, run `jobs sync --apply --confirm-vm` to install or update **only** the managed `/etc/cron.d/awtserver` file.
@@ -86,7 +86,7 @@ Current limitations: five numeric cron fields, non-root job execution, strict sc
 With an interactive SSH or local TTY (at least 30 columns wide and 14 lines high):
 
 ```bash
-python3 awtserver_tui.py
+python3 awtserver/awtserver_tui.py
 ```
 
 The compact TUI has **Status / Storage / SnapRAID / Maintenance / Packages / Guides** categories. **Arrow keys or j/k** select and scroll, **Enter** opens details, **Esc or h** returns, and **q** quits. The Guides menu groups short documents under Remote access, Networking, Applications, Storage and Maintenance. It does not write files, install packages, or activate jobs. Window resizing and a small-terminal warning are supported. Configuration selection and commit/apply workflows remain CLI-only while their safety gates are tested.
@@ -108,9 +108,9 @@ Actual storage mounts, SnapRAID parity configurations, existing array discovery,
 ## Validate
 
 ```bash
-python3 -m py_compile awtserver.py awtserver_cron.py awtserver_tui.py
+python3 -m py_compile awtserver/awtserver.py awtserver/awtserver_cron.py awtserver/awtserver_tui.py
 python3 -m unittest discover -s tests -p 'test_awtserver*.py' -v
-python3 awtserver.py plan
+python3 awtserver/awtserver.py plan
 ```
 
 These are static and offline tests, not a verified clean Debian VM installation. Validate packages with a real disposable Debian 13 VM before broadening installation support.

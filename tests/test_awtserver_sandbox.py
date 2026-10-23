@@ -11,7 +11,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "awtserver"))
 import awtserver as cli
 import awtserver_cron as cron
 import awtserver_installer as installer

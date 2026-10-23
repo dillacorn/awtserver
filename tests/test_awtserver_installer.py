@@ -5,13 +5,14 @@ import json
 import os
 import shutil
 import subprocess
+import tarfile
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "awtserver"))
 import awtserver_installer as installer
 
 
@@ -22,6 +23,28 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("awtserver_installer.py", paths)
         self.assertIn("docs/quick/android-auto.md", paths)
         self.assertEqual(len(paths), len(set(paths)))
+
+    def test_nested_archive_installs_flat_files_with_existing_manifest(self):
+        # GitHub source paths changed, but /opt/awtserver layout and format 2 did not.
+        with tempfile.TemporaryDirectory() as td:
+            buf = io.BytesIO()
+            with tarfile.open(fileobj=buf, mode="w:gz") as archive:
+                for relative in installer.file_list():
+                    archive.add(
+                        installer.source_file(installer.ROOT, relative),
+                        arcname=str(Path("awtserver-archive") / installer.repository_file(relative)),
+                    )
+            with patch.object(installer, "_download", side_effect=[
+                json.dumps({"sha": "a" * 40}).encode("utf-8"), buf.getvalue()
+            ]):
+                source, revision = installer.fetch_main(Path(td))
+            self.assertEqual(revision, "a" * 40)
+            self.assertTrue((source / "awtserver").is_file())
+            self.assertFalse((source / "awtserver").is_dir())
+            self.assertEqual(
+                installer.manifest_for(installer.ROOT)["files"],
+                installer.manifest_for(source)["files"],
+            )
 
     def test_preview_writes_nothing(self):
         with patch.object(installer, "install", side_effect=AssertionError("apply called")):
@@ -97,7 +120,7 @@ class InstallerTests(unittest.TestCase):
                 for rel in installer.file_list():
                     output = source / rel
                     output.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(installer.ROOT / rel, output)
+                    shutil.copyfile(installer.source_file(installer.ROOT, rel), output)
                 guide = source / "docs/quick/android-auto.md"
                 guide.write_text(guide.read_text() + "\nNew test revision.\n")
                 self.assertTrue(installer.update(source, dest=dest, command=command,

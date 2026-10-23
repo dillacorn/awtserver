@@ -10,7 +10,7 @@ from contextlib import redirect_stdout, redirect_stderr
 import io
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "awtserver"))
 import awtserver_docs as docs
 import awtserver_tui as tui
 
@@ -78,12 +78,12 @@ class GuideTests(unittest.TestCase):
 
     def test_terminal_command_without_install(self):
         result = subprocess.run(
-            [sys.executable, str(ROOT / "awtserver"), "docs", "android-auto"],
+            [sys.executable, str(ROOT / "awtserver" / "awtserver"), "docs", "android-auto"],
             capture_output=True, text=True, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Tailscale Auto Rules", result.stdout)
-        result = subprocess.run([sys.executable, str(ROOT / "awtserver"), "doctor"],
+        result = subprocess.run([sys.executable, str(ROOT / "awtserver" / "awtserver"), "doctor"],
                                 capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('"services"', result.stdout)

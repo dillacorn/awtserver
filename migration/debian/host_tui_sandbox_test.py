@@ -36,10 +36,10 @@ def main() -> int:
         return 2
 
     root = Path(__file__).resolve().parents[2]
-    if not root.is_dir() or not (root / "awtserver_tui.py").is_file():
+    if not root.is_dir() or not (root / "awtserver" / "awtserver_tui.py").is_file():
         print("REFUSED: source tree not found", file=sys.stderr)
         return 2
-    sys.path.insert(0, str(root))
+    sys.path.insert(0, str(root / "awtserver"))
     import awtserver_tui as tui
     import awtserver as cli
 

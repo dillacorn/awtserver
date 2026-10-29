@@ -56,11 +56,11 @@ def compose_cmd(*extra):
     )
 
 
-def private_file(path):
+def private_file(path, expected_uid=0):
     need(path.is_file() and not path.is_symlink(),
          f"Expected private file unavailable: {path}")
     info = path.stat()
-    need(info.st_uid == 0 and stat.S_IMODE(info.st_mode) & 0o077 == 0,
+    need(info.st_uid == expected_uid and stat.S_IMODE(info.st_mode) & 0o077 == 0,
          f"Private file ownership/mode unexpected: {path}")
     return path.read_bytes()
 

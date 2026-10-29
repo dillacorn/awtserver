@@ -1,6 +1,7 @@
 """Pure/read-only tests for guarded Watchtower 24-to-28 enrollment."""
 import copy
 from pathlib import Path
+import os
 import sys
 import tempfile
 import unittest
@@ -60,7 +61,7 @@ class EnrollmentTests(unittest.TestCase):
             with self.assertRaisesRegex(enroll.Stop, "ownership/mode"):
                 enroll.private_file(path)
             path.chmod(0o600)
-            self.assertEqual(enroll.private_file(path), b"{}")
+            self.assertEqual(enroll.private_file(path, expected_uid=os.getuid()), b"{}")
             link = Path(temp) / "linked.json"
             link.symlink_to(path)
             with self.assertRaisesRegex(enroll.Stop, "unavailable"):

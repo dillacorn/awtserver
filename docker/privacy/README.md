@@ -50,3 +50,13 @@ After launching, adjust the Transmission settings by referring to this visual gu
 📸 [Transmission Settings Guide](https://github.com/dillacorn/deb-omv-dots/tree/main/docker_compose_examples/privacy/transmission_settings)
 
 ---
+
+## aMuTorrent + Prowlarr + TRAWL
+
+Torrent search and downloads behind Gluetun, including 1337x Cloudflare handling through TRAWL.
+
+- **[Manual app setup](AMUTORRENT-SETUP.md)**: exactly what to enter and save in the aMuTorrent and Prowlarr web interfaces; phone-only access, proxy tags, tests and restricted user accounts.
+- [Detailed operations](AMUTORRENT-OPERATIONS.md): live verification, network/UID constraints, persistent data, safety and rollback.
+- Optional Compose examples: [aMuTorrent + Prowlarr](compose.amutorrent.yml) and [TRAWL](compose.trawl.yml).
+
+Don't deploy example overlays over the running host without comparing its current active Compose configuration.

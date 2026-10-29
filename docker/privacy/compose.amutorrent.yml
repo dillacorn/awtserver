@@ -1,0 +1,101 @@
+# Optional aMuTorrent/Prowlarr services for the inspected OMV privacy project.
+# Compare against the live Compose overlay before applying. Do not blindly deploy.
+# Gluetun's input list MUST preserve all existing ports. This is the inspected
+# host's list, not a portable default.
+configs:
+  ts-serve-amutorrent:
+    content: |
+      {
+        "TCP": {"443": {"HTTPS": true}},
+        "Web": {
+          "$${TS_CERT_DOMAIN}:443": {
+            "Handlers": {"/": {"Proxy": "http://gluetun:4000"}}
+          }
+        },
+        "AllowFunnel": {"$${TS_CERT_DOMAIN}:443": false}
+      }
+
+services:
+  gluetun:
+    environment:
+      FIREWALL_INPUT_PORTS: "9091,3000,4000,9696"
+    # Prowlarr administrator UI: SSH tunnel to the server loopback only.
+    ports:
+      - "127.0.0.1:9696:9696"
+
+  amutorrent:
+    image: g0t3nks/amutorrent:latest
+    container_name: amutorrent
+    # Inspected OMV bind mounts are UID 1001 / GID 1000 with mode 2700.
+    # Do not change this to 1000 without checking owners and ACLs.
+    user: "${AMUTORRENT_UID:-1001}:${AMUTORRENT_GID:-1000}"
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      TZ: "${TZ:-America/New_York}"
+    volumes:
+      - /docker/privacy/amutorrent/data:/usr/src/app/server/data
+      - /docker/privacy/amutorrent/logs:/usr/src/app/server/logs
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:4000/health', r => {r.resume(); process.exit(r.statusCode===200 ? 0 : 1)}).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "${TZ:-America/New_York}"
+    volumes:
+      - /docker/privacy/prowlarr/config:/config
+    restart: unless-stopped
+
+  tailscale-amutorrent:
+    image: tailscale/tailscale:latest
+    container_name: tailscale-amutorrent
+    hostname: amutorrent
+    # For first registration, create the git-ignored local authkey.env.
+    # Clear the key after registration; keep persistent Tailscale state.
+    env_file:
+      - path: ./ts/amutorrent/authkey.env
+        required: false
+    environment:
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_AUTH_ONCE: "true"
+      TS_USERSPACE: "false"
+      TS_ENABLE_HEALTH_CHECK: "true"
+      TS_LOCAL_ADDR_PORT: 127.0.0.1:41234
+    configs:
+      - source: ts-serve-amutorrent
+        target: /config/serve.json
+    volumes:
+      - /docker/privacy/ts/amutorrent/state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:41234/healthz"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped

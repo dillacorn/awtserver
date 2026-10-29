@@ -1,0 +1,20 @@
+# Optional TRAWL Cloudflare solver for the privacy project.
+# This is a FUTURE Compose-managed alternative to the standalone trial container.
+# Do NOT deploy while a standalone container named 'trawl' exists.
+# Load with the full live privacy Compose file set; do not replace existing
+# Gluetun/firewall settings or recreate other services for this trial.
+services:
+  trawl:
+    image: ghcr.io/germondai/trawl:1.9.3-baseline
+    container_name: trawl
+    network_mode: "service:gluetun"
+    shm_size: "1gb"
+    environment:
+      SESSION_CACHE_DRIVER: memory
+      BROWSER_POOL_SIZE: "1"
+      MCP_ENABLED: "false"
+      METRICS_DASHBOARD_ENABLED: "false"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped

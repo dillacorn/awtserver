@@ -22,6 +22,7 @@ services:
         192.168.1.10 vaultwarden.example-tailnet.ts.net
         192.168.1.10 mullvad.example-tailnet.ts.net
         192.168.1.10 transmission.example-tailnet.ts.net
+        192.168.1.10 amutorrent.example-tailnet.ts.net
         192.168.1.10 dockge.example-tailnet.ts.net
         192.168.1.10 owncast.example-tailnet.ts.net
       PIHOLE_UID: "1000"
@@ -76,6 +77,8 @@ services:
       - /docker/vaultwarden/ts/state/certs:/etc/nginx/vaultwarden-certs:ro
       - /docker/privacy/ts/mullvad/state/certs:/etc/nginx/mullvad-certs:ro
       - /docker/privacy/ts/transmission/state/certs:/etc/nginx/transmission-certs:ro
+      # Optional aMuTorrent local HTTPS certificate mount; verify the sidecar path first.
+      - /docker/privacy/ts/amutorrent/state/certs:/etc/nginx/amutorrent-certs:ro
       - /docker/dockge/ts/state/certs:/etc/nginx/dockge-certs:ro
       - /docker/obico/ts/state/certs:/etc/nginx/obico-certs:ro
       - /docker/owncast/ts/state/certs:/etc/nginx/owncast-certs:ro

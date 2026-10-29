@@ -13,6 +13,7 @@ import socket
 import stat
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 
 ROOT = Path("/docker/privacy")
@@ -88,12 +89,29 @@ def service_labels(container):
 
 
 def health():
-    # The current standalone TRAWL already exposes /health on shared localhost.
+    # Local health endpoint through Gluetun's shared network namespace.
     result = command(
         "docker", "exec", "gluetun", "wget", "-qO-",
-        "http://127.0.0.1:8191/health", check=False
+        "-T", "5", "http://127.0.0.1:8191/health", check=False
     )
     return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def wait_health(container_id, timeout=90, interval=3):
+    """Wait for the *same* running TRAWL to become ready, bounded by time."""
+    deadline = time.monotonic() + timeout
+    while True:
+        current = inspect("trawl")
+        need(current and current["Id"] == container_id,
+             "TRAWL container changed during health verification")
+        need(current["State"]["Status"] == "running",
+             "TRAWL stopped during health verification")
+        if health():
+            return True
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return False
+        time.sleep(min(interval, left))
 
 
 def compose_args(files):
@@ -209,9 +227,9 @@ def rollback(old_name, installed_new, added_overlay, target):
         command("docker", "rename", old_name, "trawl")
         command("docker", "update", "--restart", "unless-stopped", "trawl")
         command("docker", "start", "trawl")
-        if not health():
-            print("WARNING: Restored original TRAWL did not pass /health",
-                  file=sys.stderr)
+        if not wait_health(old["Id"], timeout=90):
+            print("WARNING: Restored original TRAWL did not become healthy "
+                  "within 90 seconds; inspect before retrying", file=sys.stderr)
     if added_overlay and not inspect("trawl") and target.is_file():
         # Retain overlay for inspection if original recovery failed.
         print("WARNING: Retaining staged overlay after incomplete rollback",
@@ -259,7 +277,8 @@ def apply(source, base, target, gluetun):
              "New TRAWL is not owned by privacy Compose")
         need(current["HostConfig"].get("NetworkMode") == "container:" + gluetun["Id"],
              "New TRAWL not attached to current VPN namespace")
-        need(health(), "New TRAWL /health failed")
+        need(wait_health(current["Id"], timeout=90),
+             "New TRAWL /health not ready after 90 seconds")
     except Exception:
         # A stopped/renamed original container is retained for rollback.
         if renamed:

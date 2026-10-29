@@ -61,62 +61,32 @@ After initial setup, the same settings are editable in **aMuTorrent → Settings
 
 At this point Prowlarr is running, but it still has **zero search indexers** until you add them in the UI.
 
-## 4. In Prowlarr: connect TRAWL for Cloudflare-protected sites
+## 4. In Prowlarr: add the TRAWL Cloudflare proxy
 
-TRAWL implements a FlareSolverr-compatible API. On the inspected server the standalone trial uses `ghcr.io/germondai/trawl:1.9.3-baseline` with `--network container:gluetun`; it does not publish port 8191.
+TRAWL is a FlareSolverr-compatible service on `http://127.0.0.1:8191` inside Gluetun. Installing it **does not automatically configure Prowlarr**.
 
-**First verify TRAWL's health locally on OMV:**
+1. Go to **Settings → Indexers → Indexer Proxies → + → FlareSolverr**.
+2. Set **Name:** `TRAWL`; **Host:** `http://127.0.0.1:8191`; **Request Timeout:** `180` seconds (Advanced).
+3. Under **Tags**, create and **select** `cloudflare`.
+4. Click **Test**, then **Save**. Confirm TRAWL appears in the saved proxy list.
 
-```bash
-vpn_pid="$(docker inspect -f '{{.State.Pid}}' gluetun)"
-nsenter -t "$vpn_pid" -n curl -fsS --max-time 10 http://127.0.0.1:8191/health
-```
+## 5. In Prowlarr: add or fix 1337x
 
-An OK response means the solver API is running, **not** that Prowlarr has saved its proxy or that 1337x works.
+1. Go to **Indexers → Add Indexer (+) → 1337x**, or use the **wrench icon** on an existing 1337x row.
+2. Under **Tags**, **select the same `cloudflare` tag** as TRAWL. The tag must appear as selected, not merely typed.
+3. Click **Test → Save**, then try a search in **Prowlarr → Search** and in aMuTorrent.
 
-In **Prowlarr**, do the following manually:
+**Important:** Both the **saved TRAWL proxy** and **saved 1337x indexer** must have the same `cloudflare` tag. A green/enabled 1337x indexer alone is insufficient. On the inspected OMV host, the indexer had no tags and returned zero results; selecting and saving the tag fixed searching (**user-confirmed, 2026-10-29**).
 
-1. Open **Settings → Indexer Proxies → + → FlareSolverr**. Enable Advanced settings if the timeout field is hidden.
-2. Enter these values:
-
-   | Prowlarr field | Value |
-   | --- | --- |
-   | Name | `TRAWL` |
-   | Host | `http://127.0.0.1:8191` |
-   | Tags | Create and **select** `cloudflare` |
-   | Request Timeout | `180` seconds |
-
-3. Click **Test**. A successful proxy test sends a request to `https://prowlarr.servarr.com/v1/ping` through TRAWL.
-4. **Click Save.** Verify TRAWL now appears in the saved **Indexer Proxies** list. **A successful Test does not mean it was saved.**
-
-The exact tag matters: Prowlarr uses a FlareSolverr-type proxy only when it detects Cloudflare **and** the indexer and proxy have a matching saved tag. An untagged proxy is disabled.
-
-## 5. In Prowlarr: add the 1337x indexer
-
-1. Open **Indexers → Add Indexer (+)**, search **1337x**, and select it.
-2. Check its selected base URL (e.g. `https://1337x.to/`). Mirrors and site availability can change.
-3. Under **Tags**, select the **same existing** `cloudflare` tag used by the saved TRAWL proxy. Do not merely type text without selecting/creating the tag.
-4. Click **Test**, and if successful click **Save**.
-5. Verify that **1337x is visible in the saved Indexers list**. An unsaved indexer is not active.
-
-**Known failure:** `Unable to access 1337x.to, blocked by CloudFlare Protection.` This can mean an indexer or proxy wasn't saved, the tags do not match, Prowlarr isn't invoking TRAWL, the challenge could not be replayed, or the current VPN exit IP is rejected. Do not assume a Docker/VPN failure from that message alone.
-
-**Live diagnostic failure (2026-10-29):** The Prowlarr API reported `1337x` enabled, with `Tags: []`, `Matching solver: False`, and one saved FlareSolverr-compatible proxy. Both `a christmas carol` and `ubuntu` returned **0** direct Prowlarr API search results. This can happen even when 1337x has a green indexer status check and aMuTorrent's Prowlarr API connection passes: the saved indexer **still has no matching proxy tag**.
-
-**Fix using Prowlarr's web UI:** Go to **Indexers**, use the **wrench icon** on the far right of the **1337x** row, select the existing `cloudflare` tag in **Tags**, and **Save**. Then confirm **Settings → Indexers → Indexer Proxies → TRAWL** has that identical *selected and saved* tag. Re-test 1337x and run a search in Prowlarr itself before searching through aMuTorrent. Saving the tag on the indexer is separate from enabling the indexer. An indexer enabled with no tags is not linked to TRAWL.
-
-**Check the distinction immediately after clicking Test:**
+If search still fails, read recent TRAWL activity after a fresh 1337x test:
 
 ```bash
-docker logs --since 5m trawl 2>&1 | grep -E 'request.start|request.success|request.failure|tier.complete' | tail -n 25
+docker logs --since 5m trawl 2>&1 | grep -E 'request.start|request.success|request.failure' | tail -n 20
 ```
 
-- **Only `prowlarr.servarr.com/v1/ping`**: Prowlarr tested the **proxy**, not 1337x.
-- **A fresh request targeting 1337x**: Prowlarr invoked the solver. Check whether the subsequent indexer test saved successfully.
-- **No new TRAWL request despite a fresh 1337x test**: Recheck that **both items are saved** and carry the same selected tag.
-- **Solver returns 200 but Prowlarr still fails**: Could be a challenge-cookie or HTTP-client replay failure; keep the browser test and indexer test separate. Do not claim success until Prowlarr can search 1337x.
+A request to `prowlarr.servarr.com/v1/ping` only verifies TRAWL's proxy test, not 1337x. See [operations](AMUTORRENT-OPERATIONS.md) for deeper VPN/Cloudflare troubleshooting.
 
-**Observed on OMV, 2026-10-29:** Direct TRAWL `/v1` testing solved a Cloudflare challenge, obtained a `cf_clearance` cookie and returned HTTP 200 for 1337x; Prowlarr's TRAWL proxy-ping succeeded. The user then showed 1337x **saved and enabled with a green status check**, and reported that the **aMuTorrent ↔ Prowlarr API integration is set up and working**. **Actual search results and a completed aMuTorrent → Transmission handoff remain unverified.**
+**Other indexers:** Try Knaben or Torrent Downloads through **Add Indexer**. EXT.to is not included in the current native Prowlarr list; Generic Torznab works only with a compatible API or third-party gateway. Add the `cloudflare` tag to other indexers **only if** they require TRAWL.
 
 ## 6. In aMuTorrent: finish Prowlarr integration
 

@@ -5,6 +5,7 @@ Jellyfin runs in its own Compose project with a Tailscale HTTPS sidecar. Inspect
 ## Access and operation
 
 - Use the private `https://<service>.<your-tailnet>.ts.net` hostname (example: `https://jellyfin.time-puffin.ts.net`).
+- [Library toolbar labels: Genres & Filters, Sort, View](OPERATIONS.md#library-toolbar-labels-jellyfin-web), provided by the existing `jellyfin_theme.css` theme (Jellyfin Web only; verify the live CSS import).
 - [Downloads library / Transmission mergerfs integration](OPERATIONS.md): read-only completed-downloads mount, verified 2026-10-29 OMV deployment, manual **Downloads** library setup, verification and rollback.
 - [Optional `compose.downloads.yml` overlay](compose.downloads.yml): intended for a future clean deployment **without** the same mount in another Compose file; the inspected host already has it in `compose.override.yml`.
 

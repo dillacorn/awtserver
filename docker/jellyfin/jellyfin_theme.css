@@ -1,7 +1,7 @@
 /* Based on ElegantFin by lscambo13
  * Source: https://github.com/lscambo13/ElegantFin
  * Modified by: dillacorn
- * Modified: 2026-03-05
+ * Modified: 2026-10-29
  */
 
 :root {
@@ -4047,3 +4047,125 @@ for extended styling, use the add-on */
 }
 
 /* basic styling for the Media Bar Plugin - end */
+
+/* -------------------------------------------------------------------------- */
+/* Library browsing: readable controls for Jellyfin Web 10.11 and 12.0.      */
+/* CSS changes the visible label, not the action or its accessibility name.   */
+/* The Filter button opens multiple filter groups; Genres is inside that menu.*/
+/* The selectors use Jellyfin's English button titles, not SVG icon position. */
+/* -------------------------------------------------------------------------- */
+
+.MuiButtonGroup-root > button.MuiButton-root:is(
+    [title="Filter"],
+    [title="Sort"],
+    [title="View settings"]
+) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-width: 0;
+    min-height: 2.75rem;
+    padding-inline: 0.7rem !important;
+    border: 1px solid var(--lighterBorderColor) !important;
+    background-color: var(--selectorBackgroundColor);
+    color: var(--textColor);
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.3;
+    text-transform: none;
+    white-space: nowrap;
+}
+
+.MuiButtonGroup-root > button.MuiButton-root[title="Filter"]::after {
+    content: "Genres & Filters";
+}
+
+.MuiButtonGroup-root > button.MuiButton-root[title="Sort"]::after {
+    content: "Sort";
+}
+
+.MuiButtonGroup-root > button.MuiButton-root[title="View settings"]::after {
+    content: "View";
+}
+
+.MuiButtonGroup-root > button.MuiButton-root:is(
+    [title="Filter"],
+    [title="Sort"],
+    [title="View settings"]
+)::after {
+    display: inline-block;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: 0.01em;
+}
+
+.MuiButtonGroup-root > button.MuiButton-root:is(
+    [title="Filter"],
+    [title="Sort"],
+    [title="View settings"]
+):hover:not(:disabled) {
+    background-color: var(--selectorBackgroundColorAlpha);
+    border-color: var(--activeColor) !important;
+    color: #fff;
+}
+
+.MuiButtonGroup-root > button.MuiButton-root:is(
+    [title="Filter"],
+    [title="Sort"],
+    [title="View settings"]
+):focus-visible {
+    outline: 2px solid var(--highlightOutlineColor) !important;
+    outline-offset: 2px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Jellyfin's existing badge still indicates when filters are selected. */
+.MuiButtonGroup-root > button.MuiButton-root[title="Filter"]:has(
+    .MuiBadge-badge:not(.MuiBadge-invisible)
+) {
+    border-color: var(--activeColor) !important;
+    background-color: rgba(0, 164, 220, 0.15);
+}
+
+/* Make the Genres accordion recognizable when the Filter menu is open. */
+#filter-popover #filtersGenres-header {
+    background-color: rgba(0, 164, 220, 0.13);
+    border-inline-start: 3px solid var(--activeColor);
+    color: var(--textColor);
+}
+
+#filter-popover #filtersGenres-header .MuiTypography-root {
+    font-weight: 700;
+}
+
+#filter-popover #filtersGenres-header:hover,
+#filter-popover #filtersGenres-header[aria-expanded="true"] {
+    background-color: rgba(0, 164, 220, 0.23);
+}
+
+/* Compact but readable on narrow screens; never hide the active-filter dot. */
+@media (max-width: 40rem) {
+    .MuiButtonGroup-root > button.MuiButton-root:is(
+        [title="Filter"],
+        [title="Sort"],
+        [title="View settings"]
+    ) {
+        gap: 0.3rem;
+        padding-inline: 0.45rem !important;
+        font-size: 0.78rem;
+        min-height: 2.75rem;
+    }
+
+    .MuiButtonGroup-root > button.MuiButton-root:is(
+        [title="Filter"],
+        [title="Sort"],
+        [title="View settings"]
+    ) > svg,
+    .MuiButtonGroup-root > button.MuiButton-root[title="Filter"] .MuiBadge-root > svg {
+        width: 1.1rem;
+        height: 1.1rem;
+    }
+}

@@ -93,3 +93,18 @@ On the inspected host, the original override is `compose.override.yml.backup.202
 ## Genre browsing
 
 For an existing Movie or Shows library, Jellyfin's web UI provides a **Filter → Genres** control; no plugin is required for ordinary genre filtering. If the goal is Netflix-like home-page genre rows, an **optional third-party** [Genre Manager plugin](https://github.com/max-aumard/jellyfin-plugin-genre-manager) uses the additional Home Screen Sections plugin. Check compatibility with the **installed** Jellyfin server version before considering it; neither was installed as part of this download-mount change. Genre discovery may be less reliable in the mixed Downloads library.
+
+## Library toolbar labels (Jellyfin Web)
+
+`docker/jellyfin/jellyfin_theme.css` is based on ElegantFin and now adds a **library toolbar visibility improvement** for Jellyfin Web. In the English web interface, the icon-only Filter / Sort / View-settings controls get visible labels **Genres & Filters**, **Sort**, and **View**. These labels match Jellyfin's actual `title` attributes as checked in the Jellyfin Web 10.11.6 and 12.0 source. The Genres accordion in the filters popover is emphasized. The active-filter badge remains visible; buttons stay keyboard accessible and have larger touch targets. Styles do not depend on icon order or add JavaScript.
+
+**Important:** `Genres & Filters` is a *label for the existing Filter menu*, not a direct genre shortcut. Selecting a genre still requires opening that menu and expanding **Genres**, or using Jellyfin's own Genres library view. No media or library data is changed.
+
+This is **CSS-only** and applies only to clients rendering **Jellyfin Web**, not every native TV/mobile client. The pseudo-element labels are visual, English-only additions; the actual Jellyfin tooltip/accessibility name remains native. Future Jellyfin Web layout changes or non-English UI translations may not match these title selectors. If the new labels do not appear, verify that the installed Jellyfin Web version has matching buttons and that the **served Custom CSS** actually loads this updated theme. A GitHub commit does not deploy CSS to the host.
+
+**Review / test before merging or deploying:**
+
+1. Inspect where the installed Jellyfin Branding / Display Custom CSS loads its existing theme. Preserve the existing CSS and any other imports, and take a backup before modifying the live branding field or file.
+2. Test on the **Movies** and **Shows** pages in a desktop browser and on a narrow phone viewport: Filter opens, Genres expands, filter selection shows its active badge, Sort opens, View opens, menu controls do not overlap, and keyboard focus is visible.
+3. For rollback, restore the prior Custom CSS/import or use the previous version of `jellyfin_theme.css`. Do not restart or recreate Jellyfin merely to apply web CSS unless its actual loading mechanism requires it.
+

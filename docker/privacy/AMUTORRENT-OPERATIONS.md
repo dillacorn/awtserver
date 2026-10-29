@@ -66,6 +66,10 @@ After verifying the **actual** local domain and LAN IP, test nginx with a truste
 
 For VPN assurance, verify all active consumers including TRAWL share Gluetun's network namespace, then inspect `ip -4 route get 1.1.1.1` from Gluetun's network namespace and compare host versus Gluetun external IPs using a trusted endpoint. The inspected host passed these checks on 2026-10-29; check again after network/Compose changes. Do not interpret them as a full DNS-leak, IPv6-leak, or kill-switch verification. TRAWL log `proxy=false` means no additional HTTP/SOCKS proxy, **not** that Gluetun was bypassed.
 
+## Jellyfin access to completed torrents (verified 2026-10-29)
+
+The existing Transmission `/downloads` mount points to mergerfs `/srv/mergerfs/data/root/downloads`. With Transmission's completion location `/downloads/transmission/complete`, the actual files live under `/srv/mergerfs/data/root/downloads/transmission/complete`. The independent `jellyfin` Compose project mounts that directory **read-only** at `/data/Incoming`; the Jellyfin user-facing library is **Downloads**. This was applied to the live Jellyfin `compose.override.yml` (not the GitHub optional overlay), and `RW: false` was verified. See [Jellyfin downloads operations](../jellyfin/OPERATIONS.md) for exact live file order, verification, rollback and library setup. Do not change Transmission paths or storage ownership as part of this Jellyfin-only mount.
+
 ## Maintenance / rollback
 
 - Back up existing live Compose overlays, `.env`, nginx site, Pi-hole settings and application data before edits. Confirm current container names, port bindings, networks, certificate paths and tailnet identity each time.

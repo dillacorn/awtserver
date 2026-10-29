@@ -1,0 +1,13 @@
+# Optional Jellyfin-only bind mount: Transmission's completed files on mergerfs.
+# This is NOT a complete Compose project. Do not load it if the same /data/Incoming
+# mount is already present in the live compose.override.yml (as on OMV 2026-10-29).
+# Inspect live project, all Compose files, source directory, and mounts first.
+services:
+  jellyfin:
+    volumes:
+      - type: bind
+        source: /srv/mergerfs/data/root/downloads/transmission/complete
+        target: /data/Incoming
+        read_only: true
+        bind:
+          create_host_path: false

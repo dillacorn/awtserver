@@ -32,6 +32,9 @@
 
 ### TRAWL-only migration helper
 
+The preflight normalizes `shm_size` from either Compose's human-readable `1gb` representation or an integer byte count. Any mismatch now identifies the exact Compose field instead of a combined message, and CI verifies the accepted/rejected size encodings. The earlier `TRAWL Compose service does not match reviewed runtime` failure occurred **before any container changes**; its precise mismatching field was not established from the first diagnostic output.
+
+
 The checked-in [`migrate_trawl.py`](migrate_trawl.py) provides a **read-only** `--check` and a guarded `--apply` for moving standalone TRAWL to the existing `privacy` Compose project, without touching Gluetun or Transmission. Use it only with the exact [`compose.trawl.yml`](compose.trawl.yml) from the same reviewed commit. It checks live Gluetun ID and health, image/default startup commands, TRAWL ports/mounts/env/shm/restart policy, Compose provenance, **unchanged effective configs for every existing service**, and TRAWL's local health response. Any mismatch stops before modifying services.
 
 The helper will **refuse `--apply` while `/docker/privacy` or the live `compose.override.yml` is world-writable**. The October 29 host has both issues. Before a migration, inspect `getfacl -cp /docker/privacy /docker/privacy/compose.override.yml`; preserve the current owner and group, ACL entries, setgid bit and other service access. Removing *only* world-write with `chmod o-w` on these two verified paths may be appropriate after inspecting their management/permissions. Do not apply recursive chmod/chown or remove ACLs.

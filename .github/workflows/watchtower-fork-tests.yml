@@ -8,6 +8,7 @@ on:
       - 'tests/test_watchtower_fork_*'
       - 'docker/privacy/compose.transmission-brother.yml'
       - 'docker/privacy/migrate_trawl.py'
+      - 'tests/test_trawl_migration.py'
       - 'tests/test_watchtower_verifier.py'
       - '.github/workflows/watchtower-fork-tests.yml'
   push:
@@ -18,6 +19,7 @@ on:
       - 'tests/test_watchtower_fork_*'
       - 'docker/privacy/compose.transmission-brother.yml'
       - 'docker/privacy/migrate_trawl.py'
+      - 'tests/test_trawl_migration.py'
       - 'tests/test_watchtower_verifier.py'
       - '.github/workflows/watchtower-fork-tests.yml'
 
@@ -32,6 +34,7 @@ jobs:
       - run: |
           python3 -m py_compile docker/watchtower/*.py docker/privacy/migrate_trawl.py tests/watchtower_fork_*.py
           python3 -m unittest discover -s tests -p 'test_watchtower*.py' -v
+          python3 -m unittest discover -s tests -p 'test_trawl_migration.py' -v
           docker compose -f docker/watchtower/compose.yml config --quiet
           mkdir -p docker/privacy/transmission-brother
           printf 'USER=testuser\nPASS=testpass\n' > docker/privacy/transmission-brother/auth.env

@@ -7,6 +7,7 @@ on:
       - 'tests/watchtower_fork_*'
       - 'tests/test_watchtower_fork_*'
       - 'docker/privacy/compose.transmission-brother.yml'
+      - 'docker/privacy/migrate_trawl.py'
       - 'tests/test_watchtower_verifier.py'
       - '.github/workflows/watchtower-fork-tests.yml'
   push:
@@ -16,6 +17,7 @@ on:
       - 'tests/watchtower_fork_*'
       - 'tests/test_watchtower_fork_*'
       - 'docker/privacy/compose.transmission-brother.yml'
+      - 'docker/privacy/migrate_trawl.py'
       - 'tests/test_watchtower_verifier.py'
       - '.github/workflows/watchtower-fork-tests.yml'
 
@@ -28,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          python3 -m py_compile docker/watchtower/*.py tests/watchtower_fork_*.py
+          python3 -m py_compile docker/watchtower/*.py docker/privacy/migrate_trawl.py tests/watchtower_fork_*.py
           python3 -m unittest discover -s tests -p 'test_watchtower*.py' -v
           docker compose -f docker/watchtower/compose.yml config --quiet
           mkdir -p docker/privacy/transmission-brother

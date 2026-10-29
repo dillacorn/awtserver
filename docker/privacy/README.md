@@ -64,3 +64,4 @@ Don't deploy example overlays over the running host without comparing its curren
 ## Second Transmission instance (staged)
 
 [Independent Transmission setup and Watchtower protections](TRANSMISSION-BROTHER-OPERATIONS.md). The [optional Compose overlay](compose.transmission-brother.yml) is **not deployed**. It requires a distinct VPN peer port, RPC 9092 configured before startup, and updated Gluetun/Watchtower policies.
+- [Guarded TRAWL migration helper](migrate_trawl.py) (read-only by default; checked-in service overlay required).

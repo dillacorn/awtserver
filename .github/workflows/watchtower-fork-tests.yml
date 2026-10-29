@@ -9,6 +9,7 @@ on:
       - 'docker/privacy/migrate_trawl.py'
       - 'tests/test_trawl_migration.py'
       - 'tests/test_watchtower_verifier.py'
+      - 'tests/test_watchtower_28_enroll.py'
       - '.github/workflows/watchtower-fork-tests.yml'
   push:
     branches: [main]
@@ -19,6 +20,7 @@ on:
       - 'docker/privacy/migrate_trawl.py'
       - 'tests/test_trawl_migration.py'
       - 'tests/test_watchtower_verifier.py'
+      - 'tests/test_watchtower_28_enroll.py'
       - '.github/workflows/watchtower-fork-tests.yml'
 
 permissions:

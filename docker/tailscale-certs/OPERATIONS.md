@@ -50,3 +50,7 @@ Before applying, it backs up `config.xml` and the OMV cron file under root-only 
 For the OMV web UI alternative, open **System → Scheduled Tasks**, edit the existing renewal task, select **Weekly**, then save and apply.
 
 OMV's send-email setting routes command output to its configured mail recipient; it does not guarantee successful delivery. Confirm the mail system separately if email alerts are important.
+
+## aMuTorrent sidecar (trial)
+
+The optional privacy stack uses `tailscale-amutorrent` with persistent state and exported certificates in `/docker/privacy/ts/amutorrent/state/certs`. `renew.sh` includes this service. Before scheduling renewal, inspect the actual sidecar and run the script with `--dry-run`; verify that the expected MagicDNS identity, cert files, expiry and nginx certificate mount match the live host. This does **not** renew the separate Tailscale Serve HTTPS certificate.

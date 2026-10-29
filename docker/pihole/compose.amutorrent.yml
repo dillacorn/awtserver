@@ -1,0 +1,6 @@
+# Optional certificate mount for the local HTTPS aMuTorrent nginx site.
+# Add to the COMPLETE existing Pi-hole COMPOSE_FILE list, never replace it.
+services:
+  nginx:
+    volumes:
+      - /docker/privacy/ts/amutorrent/state/certs:/etc/nginx/amutorrent-certs:ro

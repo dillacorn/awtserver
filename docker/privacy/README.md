@@ -50,3 +50,7 @@ After launching, adjust the Transmission settings by referring to this visual gu
 📸 [Transmission Settings Guide](https://github.com/dillacorn/deb-omv-dots/tree/main/docker_compose_examples/privacy/transmission_settings)
 
 ---
+
+## aMuTorrent + Prowlarr
+
+Optional multi-user search interface behind Gluetun with Transmission as the download engine. The separate Tailscale application and Pi-hole local HTTPS route are documented in [aMuTorrent operations](AMUTORRENT-OPERATIONS.md). Validate the live Compose stack before using the optional overlay.

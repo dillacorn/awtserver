@@ -1,0 +1,10 @@
+# Host-only state and secrets: never commit from the running OMV deployment.
+/ts/
+/amutorrent/
+/prowlarr/
+/gluetun/
+/transmission/data/
+/transmission/watch/
+/mullvad-browser/config/
+/compose.override.yml
+/.env.local

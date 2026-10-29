@@ -41,7 +41,7 @@ RESTART_NGINX=1
 
 # Optional sidecar services to renew.
 # Add more names here as needed.
-EXTRA_SERVICES=("jellyfin" "navidrome" "flame" "seerr" "audiobookshelf" "brave" "ntfy" "immich" "vaultwarden" "mullvad" "transmission" "dockge" "obico")
+EXTRA_SERVICES=("jellyfin" "navidrome" "flame" "seerr" "audiobookshelf" "brave" "ntfy" "immich" "vaultwarden" "mullvad" "transmission" "amutorrent" "dockge" "obico")
 
 # Optional per-service container overrides.
 # Default if omitted: tailscale-<service>
@@ -57,6 +57,7 @@ declare -A SERVICE_CONTAINER=(
   [immich]="tailscale-immich"
   [mullvad]="tailscale-mullvad"
   [transmission]="tailscale-transmission"
+  [amutorrent]="tailscale-amutorrent"
   [dockge]="tailscale-dockge"
   [obico]="tailscale-obico"
 )
@@ -75,6 +76,7 @@ declare -A SERVICE_CERT_DIR=(
   [immich]="/docker/immich/ts/state/certs"
   [mullvad]="/docker/privacy/ts/mullvad/state/certs"
   [transmission]="/docker/privacy/ts/transmission/state/certs"
+  [amutorrent]="/docker/privacy/ts/amutorrent/state/certs"
   [dockge]="/docker/dockge/ts/state/certs"
   [obico]="/docker/obico/ts/state/certs"
 )

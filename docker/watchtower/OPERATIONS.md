@@ -2,6 +2,9 @@
 
 ## Additional VPN clients and second Transmission (2026-10-29)
 
+**Migration progress, October 29:** TRAWL is now Compose-managed in `privacy` and its local `/health` passed with unchanged Gluetun/Transmission IDs. The stopped original backup `trawl-standalone-backup-20261029t172518z` remains for rollback. **Do not expand Watchtower yet:** Prowlarr proxy/indexer integration is not yet reverified, the backup must be deliberately retired after successful verification, and the second Transmission/Tailscale services do not exist. The installed manifest and 24-target verifier remain unchanged.
+
+
 **Existing live issue:** Read-only diagnostics on `openmediavault` show the 24-target Watchtower list and private `targets.json` are unchanged. The verifier already fails with `Unapproved additional Gluetun namespace user: trawl`. Current `amutorrent`, `prowlarr`, and standalone `trawl` share Gluetun's namespace but are not selected for Watchtower updates. This requires a safe group migration, not suppression of the namespace guard.
 
 This branch's `watchtower_verify.py` supports only two exact policies: the original **24** targets or the expanded **30**. The six additions are `amutorrent`, `prowlarr`, `trawl`, `tailscale-amutorrent`, `transmission-brother`, and `tailscale-transmission-brother`. Neither a partial extension nor an unrecognized namespace client can pass. The selected TRAWL **must be Compose-managed** because the verifier requires Compose source metadata for every Watchtower target. All selected Gluetun clients must be attached to the **current** Gluetun namespace and cannot have firewall administration capabilities.

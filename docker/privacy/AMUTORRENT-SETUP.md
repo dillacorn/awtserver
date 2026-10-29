@@ -140,6 +140,6 @@ aMuTorrent's general configuration documents both Transmission and Prowlarr, but
 - [ ] Local Pi-hole HTTPS and remote Tailscale HTTPS are each verified
 - [ ] Exported Tailscale certificate renewal has been dry-run checked/scheduled
 
-**This GitHub branch is not a live-server deployment.** The current standalone TRAWL container is not Compose-managed; the optional `compose.trawl.yml` provides a future Compose version. Do **not** run it over an existing container named `trawl`. The migration must be planned after inspecting the live privacy project and all active overlays; do not remove the existing container just to make an example work.
+**2026-10-29 host update:** The operator successfully migrated TRAWL to Compose service `trawl` under project `privacy` using the guarded helper, with original Gluetun and Transmission IDs unchanged. The old standalone container remains **stopped as a rollback backup** until a new Prowlarr proxy test and real 1337x search succeed. The live overlay is `/docker/privacy/compose.trawl.yml` and must be kept in the complete Compose file order; these instructions are still manual UI steps, not a production deployment. See [TRAWL operations](AMUTORRENT-OPERATIONS.md) and [second Transmission plan](TRANSMISSION-BROTHER-OPERATIONS.md).
 
 Official references: [aMuTorrent configuration](https://got3nks.github.io/amutorrent/docs/configuration/), [Prowlarr proxy settings](https://wiki.servarr.com/prowlarr/settings), [TRAWL FlareSolverr-compatible API](https://github.com/germondai/trawl).

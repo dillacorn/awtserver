@@ -2,6 +2,14 @@
 
 aMuTorrent provides multi-user, browser-based torrent search and download management; Prowlarr supplies search indexes and existing Transmission remains the download engine. The two UIs serve different audiences: only aMuTorrent is shared with non-admin users.
 
+## 2026-10-29 TRAWL migration completed (host-confirmed)
+
+The operator ran the guarded `migrate_trawl.py` helper. After the first attempt's immediate health check failed and reverted, the corrected bounded-wait helper successfully created `trawl` as a **Compose-managed** service in project `privacy`, sharing the unchanged Gluetun namespace. Docker inspect reports project/service `privacy`/`trawl`, and `http://127.0.0.1:8191/health` returned `"status":"ok"` with one live browser worker. Gluetun and Transmission container IDs were unchanged.
+
+The original stopped container is preserved as `trawl-standalone-backup-20261029t172518z`, along with a root-only Docker inspection backup at `/root/awtserver-trawl-migration/trawl-standalone-backup-20261029t172518z.json`. The live overlay was installed at `/docker/privacy/compose.trawl.yml`. The privacy directory and `compose.override.yml` had world-write removed (`2775`/`0664`), without stripping named ACL entries.
+
+**Pending verification:** a fresh Prowlarr → TRAWL proxy test and a 1337x search using the saved matching `cloudflare` tag. Do not remove the stopped original backup until these succeed. Since the backup still points at Gluetun's namespace, the independent 24-target Watchtower verifier continues to fail; full expanded enrollment must follow only after the backup is deliberately retired, all planned six additions exist, and the complete updater policy can be safely applied. A successful migration does **not** mean Watchtower was fixed or that the second Transmission was deployed.
+
 ## Current OMV observation (2026-10-29)
 
 These are **dated host observations**, not guarantees about another installation or a future server state.

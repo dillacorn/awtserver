@@ -1,0 +1,73 @@
+# Optional addition to the running privacy Compose project, never a standalone stack.
+# Review host files first; the existing Gluetun firewall is NOT changed here.
+# Pre-create settings.json with rpc-port=9092 before starting Transmission.
+configs:
+  ts-serve-transmission-brother:
+    content: |
+      {
+        "TCP": {"443": {"HTTPS": true}},
+        "Web": {
+          "$${TS_CERT_DOMAIN}:443": {
+            "Handlers": {"/": {"Proxy": "http://gluetun:9092"}}
+          }
+        },
+        "AllowFunnel": {"$${TS_CERT_DOMAIN}:443": false}
+      }
+services:
+  transmission-brother:
+    image: lscr.io/linuxserver/transmission:latest
+    container_name: transmission-brother
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    env_file:
+      - path: ./transmission-brother/auth.env
+        required: true
+    environment:
+      PUID: "${PUID:?PUID required}"
+      PGID: "${PGID:?PGID required}"
+      TZ: "${TZ:-America/New_York}"
+      PEERPORT: "${TRANSMISSION_BROTHER_PEER_PORT:?Second peer port required}"
+    volumes:
+      - ./transmission-brother/data:/config
+      - ./transmission-brother/watch:/watch
+      - /srv/mergerfs/data/root/downloads/transmission-brother:/downloads
+    restart: unless-stopped
+
+  tailscale-transmission-brother:
+    image: tailscale/tailscale:latest
+    container_name: tailscale-transmission-brother
+    hostname: transmission-brother
+    env_file:
+      - path: ./ts/transmission-brother/authkey.env
+        required: false
+    environment:
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_AUTH_ONCE: "true"
+      TS_USERSPACE: "false"
+      TS_ENABLE_HEALTH_CHECK: "true"
+      TS_LOCAL_ADDR_PORT: "127.0.0.1:41234"
+    configs:
+      - source: ts-serve-transmission-brother
+        target: /config/serve.json
+    volumes:
+      - ./ts/transmission-brother/state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      gluetun:
+        condition: service_healthy
+      transmission-brother:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:41234/healthz"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped

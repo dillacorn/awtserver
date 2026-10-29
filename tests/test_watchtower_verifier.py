@@ -68,6 +68,32 @@ class StandaloneVerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(wt.Stop, "additional Gluetun namespace"):
             wt.verify_runtime(all_containers, names)
 
+
+    def test_30_targets_and_standalone_trawl_is_rejected(self):
+        all_containers, names = fleet()
+        parent = all_containers["gluetun"]["Id"]
+        for name in wt.ADDITIONAL:
+            c = make_container(name, labels=compose_labels())
+            if name in wt.GLUETUN_CLIENTS:
+                c["HostConfig"]["NetworkMode"] = "container:" + parent
+            all_containers[name] = c
+        names = sorted(wt.EXPANDED)
+        all_containers["watchtower"]["Config"]["Cmd"] = [
+            "--schedule", wt.SCHEDULE, "--no-startup-message", *names
+        ]
+        self.assertEqual(wt.verify_runtime(all_containers, names), names)
+        all_containers["trawl"]["Config"]["Labels"] = {}
+        with self.assertRaisesRegex(wt.Stop, "missing Compose project/service"):
+            wt.verify_runtime(all_containers, names)
+
+    def test_original_targets_reject_unenrolled_trawl(self):
+        all_containers, names = fleet()
+        all_containers["trawl"] = make_container(
+            "trawl", network="container:" + all_containers["gluetun"]["Id"]
+        )
+        with self.assertRaisesRegex(wt.Stop, "excluded dependent trawl"):
+            wt.verify_runtime(all_containers, names)
+
     def test_private_credentials_and_allowlist_mode(self):
         cfg = {
             "host": "smtp.example.org", "port": 587,
@@ -87,6 +113,15 @@ class StandaloneVerifierTests(unittest.TestCase):
             private.write_text(json.dumps(cfg))
             private.chmod(0o600)
             self.assertEqual(wt.read_targets(root), sorted(wt.EXPECTED))
+            manifest.write_text(json.dumps({
+                "schedule": wt.SCHEDULE,
+                "container_names": sorted(wt.EXPANDED)
+            }))
+            self.assertEqual(wt.read_targets(root), sorted(wt.EXPANDED))
+            manifest.write_text(json.dumps({
+                "schedule": wt.SCHEDULE,
+                "container_names": sorted(wt.EXPECTED)
+            }))
             self.assertEqual(wt.read_smtp(root), cfg)
             private.chmod(0o644)
             with self.assertRaisesRegex(wt.Stop, "permissions too open"):
@@ -94,7 +129,7 @@ class StandaloneVerifierTests(unittest.TestCase):
             private.chmod(0o600)
             manifest.write_text(json.dumps({"schedule": wt.SCHEDULE,
                                             "container_names": ["app-ntfy"]}))
-            with self.assertRaisesRegex(wt.Stop, "24-target policy"):
+            with self.assertRaisesRegex(wt.Stop, "24/30-target policy"):
                 wt.read_targets(root)
 
     def test_smtp_mandatory_tls(self):

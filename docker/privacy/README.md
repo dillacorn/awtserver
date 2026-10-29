@@ -60,3 +60,7 @@ Torrent search and downloads behind Gluetun, including 1337x Cloudflare handling
 - Optional Compose examples: [aMuTorrent + Prowlarr](compose.amutorrent.yml) and [TRAWL](compose.trawl.yml).
 
 Don't deploy example overlays over the running host without comparing its current active Compose configuration.
+
+## Second Transmission instance (staged)
+
+[Independent Transmission setup and Watchtower protections](TRANSMISSION-BROTHER-OPERATIONS.md). The [optional Compose overlay](compose.transmission-brother.yml) is **not deployed**. It requires a distinct VPN peer port, RPC 9092 configured before startup, and updated Gluetun/Watchtower policies.

@@ -32,6 +32,18 @@ EXPECTED = frozenset({
     "transmission",
 })
 
+# All-or-nothing original 24 and expanded 30 target policies.
+# Six additional targets require Compose-managed TRAWL.
+ADDITIONAL = frozenset({
+    "amutorrent", "prowlarr", "trawl", "transmission-brother",
+    "tailscale-amutorrent", "tailscale-transmission-brother",
+})
+EXPANDED = EXPECTED | ADDITIONAL
+GLUETUN_CLIENTS = frozenset({
+    "transmission", "mullvad-browser", "amutorrent", "prowlarr",
+    "trawl", "transmission-brother",
+})
+
 
 class Stop(RuntimeError):
     pass
@@ -71,12 +83,12 @@ def read_targets(root=ROOT):
     need(path.stat().st_mode & 0o077 == 0, "Target manifest permissions too open")
     manifest = json.loads(path.read_text())
     names = manifest.get("container_names")
-    need(isinstance(names, list) and len(names) == 24 and
+    need(isinstance(names, list) and len(names) in (24, 30) and
          all(isinstance(n, str) and
              re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", n) for n in names) and
-         set(names) == EXPECTED and
+         set(names) in (EXPECTED, EXPANDED) and
          manifest.get("schedule") == SCHEDULE,
-         "Watchtower manifest does not match installed 24-target policy")
+         "Watchtower manifest does not match approved 24/30-target policy")
     return names
 
 
@@ -165,7 +177,7 @@ def check_vpn(fleet):
         need(any(network.subnet_of(allowed) for allowed in local
                  if network.version == allowed.version),
              "Gluetun permits an unapproved public firewall bypass")
-    for name in ("transmission", "mullvad-browser"):
+    for name in sorted(GLUETUN_CLIENTS & fleet.keys()):
         child = fleet[name]
         need(child["HostConfig"].get("NetworkMode") == "container:" + parent["Id"],
              f"{name}: not attached to the current Gluetun namespace")
@@ -176,7 +188,7 @@ def check_vpn(fleet):
              f"{name}: can modify the shared VPN firewall")
     for name, item in fleet.items():
         if item["HostConfig"].get("NetworkMode") == "container:" + parent["Id"]:
-            need(name in ("transmission", "mullvad-browser"),
+            need(name in GLUETUN_CLIENTS,
                  f"Unapproved additional Gluetun namespace user: {name}")
 
 
@@ -206,12 +218,12 @@ def check_dependencies(fleet, names):
 
 
 def verify_runtime(fleet, names):
-    need(len(names) == 24 and set(names) == EXPECTED and len(set(names)) == 24,
-         "Expected 24 Watchtower services are not enrolled")
+    need(len(names) == len(set(names)) and set(names) in (EXPECTED, EXPANDED),
+         "Expected approved 24/30 Watchtower services are not enrolled")
     updater = fleet.get("watchtower")
     need(updater and state(updater) == "running", "Watchtower daemon not running")
     cmd = updater.get("Config", {}).get("Cmd") or []
-    need(cmd[:2] == ["--schedule", SCHEDULE] and cmd[-24:] == names,
+    need(cmd == ["--schedule", SCHEDULE, "--no-startup-message", *names],
          "Watchtower schedule/positional allowlist changed")
     need(updater["Config"]["Image"] == "nickfedor/watchtower:1.23.1",
          "Unexpected Watchtower image")

@@ -1,5 +1,20 @@
 # Watchtower operations and historical verification
 
+## Additional VPN clients and second Transmission (2026-10-29)
+
+**Existing live issue:** Read-only diagnostics on `openmediavault` show the 24-target Watchtower list and private `targets.json` are unchanged. The verifier already fails with `Unapproved additional Gluetun namespace user: trawl`. Current `amutorrent`, `prowlarr`, and standalone `trawl` share Gluetun's namespace but are not selected for Watchtower updates. This requires a safe group migration, not suppression of the namespace guard.
+
+This branch's `watchtower_verify.py` supports only two exact policies: the original **24** targets or the expanded **30**. The six additions are `amutorrent`, `prowlarr`, `trawl`, `tailscale-amutorrent`, `transmission-brother`, and `tailscale-transmission-brother`. Neither a partial extension nor an unrecognized namespace client can pass. The selected TRAWL **must be Compose-managed** because the verifier requires Compose source metadata for every Watchtower target. All selected Gluetun clients must be attached to the **current** Gluetun namespace and cannot have firewall administration capabilities.
+
+**Not yet deployed:** the live private `/docker/watchtower-fork/compose.yml` and root mode-0600 `targets.json` still require a separate guarded enrollment process. Replacing only the verifier will not select additional containers. The `05:00` service must run the matching updated verifier, and the new updater command must exactly equal the private manifest list with schedule `0 45 2 * * *`. Do not change the 24-target list until all six new containers exist and TRAWL has been migrated to its reviewed Compose overlay, with a tested rollback. Keep the original Watchtower configuration and manifest in dated root-only backups.
+
+Before enrolling: verify live Compose file sets, firewall ports, Tailscale identities and passwords, Gluetun container namespace users, and the separate Transmission settings and volumes. Migrate TRAWL in isolation without recreating the VPN parent, then carry out any Gluetun firewall change in a planned maintenance window. Never run broad `docker compose up -d` or `down`. On completion verify `python3 /docker/watchtower-fork/watchtower_verify.py --verify` **without notifications** and test authenticated VPN egress and Prowlarr/TRAWL behavior. Watchtower's restart ordering does not guarantee VPN health before dependent services start; 05:00 detection is not automatic recovery.
+
+See the [second Transmission operations guide](../privacy/TRANSMISSION-BROTHER-OPERATIONS.md) for the verified source paths and isolated deployment design.
+
+---
+
+
 **2026-10-21 update:** The server operator reports a successful overnight Watchtower update with applications remaining up. Earlier October 20 verification caveats below are historical snapshots.
 
 ---

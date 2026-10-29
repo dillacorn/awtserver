@@ -8,3 +8,4 @@
 /mullvad-browser/config/
 /compose.override.yml
 /.env.local
+/transmission-brother/

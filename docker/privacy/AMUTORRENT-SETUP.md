@@ -101,6 +101,10 @@ The exact tag matters: Prowlarr uses a FlareSolverr-type proxy only when it dete
 
 **Known failure:** `Unable to access 1337x.to, blocked by CloudFlare Protection.` This can mean an indexer or proxy wasn't saved, the tags do not match, Prowlarr isn't invoking TRAWL, the challenge could not be replayed, or the current VPN exit IP is rejected. Do not assume a Docker/VPN failure from that message alone.
 
+**Live diagnostic failure (2026-10-29):** The Prowlarr API reported `1337x` enabled, with `Tags: []`, `Matching solver: False`, and one saved FlareSolverr-compatible proxy. Both `a christmas carol` and `ubuntu` returned **0** direct Prowlarr API search results. This can happen even when 1337x has a green indexer status check and aMuTorrent's Prowlarr API connection passes: the saved indexer **still has no matching proxy tag**.
+
+**Fix using Prowlarr's web UI:** Go to **Indexers**, use the **wrench icon** on the far right of the **1337x** row, select the existing `cloudflare` tag in **Tags**, and **Save**. Then confirm **Settings → Indexers → Indexer Proxies → TRAWL** has that identical *selected and saved* tag. Re-test 1337x and run a search in Prowlarr itself before searching through aMuTorrent. Saving the tag on the indexer is separate from enabling the indexer. An indexer enabled with no tags is not linked to TRAWL.
+
 **Check the distinction immediately after clicking Test:**
 
 ```bash

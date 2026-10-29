@@ -6,6 +6,7 @@ adds its overlay. It never recreates Gluetun, Transmission, or other services.
 """
 import argparse
 import json
+import re
 import os
 from pathlib import Path
 import socket
@@ -58,6 +59,28 @@ def inspect(name):
 def cfg_env(container):
     return dict(pair.split("=", 1) for pair in
                 (container["Config"].get("Env") or []) if "=" in pair)
+
+
+
+def normalize_shm_bytes(value):
+    """Normalize Compose's numeric or byte-unit shm_size to exact bytes."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if not isinstance(value, str):
+        return None
+    match = re.fullmatch(r"([0-9]+)(b|kb?|mb?|gb?)?", value.strip().lower())
+    if not match:
+        return None
+    unit = match.group(2) or "b"
+    scale = {
+        "b": 1, "k": 1024, "kb": 1024,
+        "m": 1024 ** 2, "mb": 1024 ** 2,
+        "g": 1024 ** 3, "gb": 1024 ** 3,
+    }
+    return int(match.group(1)) * scale[unit]
+
 
 
 def service_labels(container):
@@ -152,11 +175,16 @@ def preflight(source):
         need(new_services[name] == old,
              f"Overlay unexpectedly modifies existing service: {name}")
     new = new_services["trawl"]
-    need(new.get("image") == IMAGE and
-         new.get("network_mode") == "service:gluetun" and
-         new.get("shm_size") == 1024 ** 3 and
-         new.get("restart") == "unless-stopped",
-         "TRAWL Compose service does not match reviewed runtime")
+    # Docker Compose may retain a size expression such as "1gb" in its
+    # normalized JSON output. Compare the resulting bytes, not the encoding.
+    need(new.get("image") == IMAGE,
+         f"TRAWL Compose image mismatch: {new.get('image')!r}")
+    need(new.get("network_mode") == "service:gluetun",
+         f"TRAWL Compose network_mode mismatch: {new.get('network_mode')!r}")
+    need(normalize_shm_bytes(new.get("shm_size")) == 1024 ** 3,
+         f"TRAWL Compose shm_size mismatch: {new.get('shm_size')!r} (expected 1 GiB)")
+    need(new.get("restart") == "unless-stopped",
+         f"TRAWL Compose restart policy mismatch: {new.get('restart')!r}")
     need(not new.get("volumes") and not new.get("ports") and
          not new.get("privileged") and not new.get("cap_add"),
          "TRAWL Compose adds unexpected privileges, mounts or ports")

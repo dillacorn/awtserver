@@ -51,6 +51,12 @@ After launching, adjust the Transmission settings by referring to this visual gu
 
 ---
 
-## aMuTorrent + Prowlarr
+## aMuTorrent + Prowlarr + TRAWL
 
-Optional multi-user search interface behind Gluetun with Transmission as the download engine. The separate Tailscale application and Pi-hole local HTTPS route are documented in [aMuTorrent operations](AMUTORRENT-OPERATIONS.md). Validate the live Compose stack before using the optional overlay.
+Torrent search and downloads behind Gluetun, including 1337x Cloudflare handling through TRAWL.
+
+- **[Manual app setup](AMUTORRENT-SETUP.md)**: exactly what to enter and save in the aMuTorrent and Prowlarr web interfaces; phone-only access, proxy tags, tests and restricted user accounts.
+- [Detailed operations](AMUTORRENT-OPERATIONS.md): live verification, network/UID constraints, persistent data, safety and rollback.
+- Optional Compose examples: [aMuTorrent + Prowlarr](compose.amutorrent.yml) and [TRAWL](compose.trawl.yml).
+
+Don't deploy example overlays over the running host without comparing its current active Compose configuration.

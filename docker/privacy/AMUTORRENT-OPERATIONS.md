@@ -11,7 +11,9 @@ These are **dated host observations**, not guarantees about another installation
 - aMuTorrent returned HTTP 200 from `/health`; its initial setup saved `/docker/privacy/amutorrent/data/config.json`.
 - Dedicated Tailscale machine `amutorrent` registered and served HTTPS to Gluetun port 4000. Local Pi-hole Compose contained the new host record, nginx passed `nginx -t`, and forced local HTTPS returned HTTP 302 with TLS verification result 0.
 - The sidecar container environment no longer contained `TS_AUTHKEY` (on-disk secret state and key revocation still require separate verification).
-- **Not yet verified:** admin authentication in a fresh session, indexer configuration, Prowlarr-to-Transmission searches/downloads, another user's permissions, VPN public egress, access from outside the LAN, or future certificate renewal.
+- A standalone `trawl` container was started using `ghcr.io/germondai/trawl:1.9.3-baseline` and `--network container:gluetun`. Its `/health` returned OK. Direct FlareSolverr-compatible `/v1` request solved the 1337x Cloudflare challenge with HTTP 200 and a `cf_clearance` cookie. Prowlarr sent successful proxy-ping requests to TRAWL; **these were only proxy tests**, not proof of a working 1337x indexer.
+- All five privacy containers (`gluetun`, `transmission`, `amutorrent`, `prowlarr`, `trawl`) were confirmed in the same Linux network namespace. Gluetun was healthy, the observed route to an external IPv4 address used `tun0`, and the VPN exit address differed from the host's public address. This confirms **observed routed VPN egress**, not a full DNS-leak/kill-switch test; public IPs are deliberately omitted.
+- **Not yet verified:** admin authentication in a fresh session, saved 1337x indexer/search, Prowlarr-to-Transmission downloads, another user's permissions, access from outside the LAN as a non-admin, DNS-leak/kill-switch testing, or exported certificate renewal.
 
 ### Why UID 1001 is intentional
 
@@ -21,7 +23,9 @@ For any other host, inspect owners, ACLs, application user and bind mounts first
 
 ## Source layout
 
+- [Manual application setup](AMUTORRENT-SETUP.md): first-time web UI steps, Prowlarr authentication, TRAWL proxy and tag setup, 1337x troubleshooting, aMuTorrent wizard and restricted users.
 - `docker/privacy/compose.amutorrent.yml`: optional privacy Compose overlay, not an independent stack. Its Gluetun firewall ports reflect the inspected trial only; merge with the live port list instead of replacing additional existing ports.
+- `docker/privacy/compose.trawl.yml`: **optional future Compose-managed TRAWL service**. The current OMV `trawl` is a standalone container, so do not activate this overlay without a migration plan. Port 8191 stays internal and does not need a Gluetun input firewall exception for shared-loopback traffic.
 - `docker/pihole/compose.amutorrent.yml`: nginx certificate directory overlay, to append to the **complete** existing Pi-hole Compose file list.
 - `docker/pihole/conf.d/amutorrent.conf`: local HTTPS proxy example (replace the example domain).
 - `docker/pihole/compose_example.yml`: includes an example DNS host record and certificate mount for a clean deployment.
@@ -43,15 +47,9 @@ aMuTorrent -> Transmission RPC on 127.0.0.1:9091 (same namespace)
 - Restrict your brother's Tailscale access using tailnet policy as appropriate. aMuTorrent permissions do not isolate storage or enforce per-user disk quotas; shared Transmission can still fill disks.
 - Transmission is already authenticated. Do not commit its password or Prowlarr's API key; configure both within aMuTorrent's authenticated Settings UI.
 
-## Manual application integration (pending validation)
+## Manual application configuration (pending final validation)
 
-1. Confirm a private browser session prompts for aMuTorrent credentials before exposing it to other users.
-2. Reach Prowlarr over an SSH local forward, not an exposed port:
-   `ssh -N -L 127.0.0.1:9696:127.0.0.1:9696 root@<verified-omv-lan-ip>`.
-   Visit `http://127.0.0.1:9696`, enable authentication, add and test trusted indexers.
-3. In aMuTorrent, Settings > BitTorrent Integration: confirm Transmission host `127.0.0.1`, port `9091`, path `/transmission/rpc`, its existing username/password, SSL disabled for internal RPC. Enable Prowlarr with `http://127.0.0.1:9696` and the API key from Prowlarr's Settings > General; Test and Save.
-4. Search for a legal/public-domain torrent or Linux distribution image, send the result to Transmission, and verify the task and finished file. **Upstream's Prowlarr-specific guide still mentions only qBittorrent/rTorrent; Transmission handoff is not treated as tested until this succeeds.**
-5. Add a restricted account and test that searching/adding works but Prowlarr/admin controls and other users' download changes do not.
+Read [aMuTorrent, Prowlarr and TRAWL manual setup](AMUTORRENT-SETUP.md) **before** attempting search/download testing. This is the operator procedure for every required web-interface action, including a phone-only Prowlarr admin route via the existing remote Mullvad Browser, secure login, TRAWL's FlareSolverr-compatible proxy, saved matching `cloudflare` tags, 1337x indexer, the aMuTorrent wizard, Transmission RPC, API key, and restricted accounts. **Proxy ping and direct TRAWL 1337x success do not establish Prowlarr's end-to-end search or aMuTorrent's Transmission handoff.**
 
 ## Read-only operational checks
 
@@ -64,12 +62,13 @@ docker exec nginx-pihole nginx -t
 
 After verifying the **actual** local domain and LAN IP, test nginx with a trusted TLS connection using `curl --resolve domain:443:lan-ip https://domain/health`, and Pi-hole's DNS host entry with `dig @lan-ip domain A +short`. Separately test Tailscale remote access and the application's login.
 
-For VPN assurance, check that aMuTorrent and Prowlarr use the running Gluetun network namespace and confirm outbound egress from inside those namespaces through an independently identified VPN endpoint. Do not mistake a matching namespace for proof of VPN egress, and do not make privacy claims based on Gluetun health alone.
+For VPN assurance, verify all active consumers including TRAWL share Gluetun's network namespace, then inspect `ip -4 route get 1.1.1.1` from Gluetun's network namespace and compare host versus Gluetun external IPs using a trusted endpoint. The inspected host passed these checks on 2026-10-29; check again after network/Compose changes. Do not interpret them as a full DNS-leak, IPv6-leak, or kill-switch verification. TRAWL log `proxy=false` means no additional HTTP/SOCKS proxy, **not** that Gluetun was bypassed.
 
 ## Maintenance / rollback
 
 - Back up existing live Compose overlays, `.env`, nginx site, Pi-hole settings and application data before edits. Confirm current container names, port bindings, networks, certificate paths and tailnet identity each time.
 - Never rerun the one-time trial installer: it was interrupted partway through the initial Gluetun health check, and the follow-up repair was required for storage ACLs. Neither failed script belongs in a production deployment path.
 - Do not restart or recreate Gluetun, Transmission or Mullvad Browser just to change the aMuTorrent application or its accounts. Changing Gluetun's firewall ports may require a maintenance interruption affecting all three.
+- The current standalone `trawl` has `--network container:gluetun`, not Compose ownership. If Gluetun is recreated, that standalone container may remain tied to an obsolete namespace and must be revalidated. For later Compose migration, inspect the running container, ports and project first; create a rollback plan, then replace it with the optional `compose.trawl.yml` service **under explicit host authorization**. Do not use `docker compose down` or delete TRAWL while it is still serving Prowlarr.
 - If a new Compose overlay fails, revert only the changed files from the recorded backup, preserve the persistent Tailscale state and aMuTorrent database, validate the restored *complete* Compose set, and recreate only affected services. Do not use `docker compose down` or delete volumes.
 - Verify certificate renewal for the dedicated sidecar through `docker/tailscale-certs/renew.sh --dry-run` before relying on it. Exported cert files used by nginx need scheduled renewal and an nginx reload/restart on renewal; Tailscale Serve HTTPS renewal is independent.

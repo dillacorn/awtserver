@@ -100,16 +100,31 @@ After Prowlarr has at least one saved, working indexer:
 
 aMuTorrent's general configuration documents both Transmission and Prowlarr, but the older Prowlarr-specific integration document refers to qBittorrent/rTorrent. Therefore **the Transmission search-to-download handoff remains a compatibility test**, not an assumed success.
 
-## 7. In aMuTorrent: add a restricted user
+## 7. In aMuTorrent: create a limited but usable account
 
-Only after verifying the administrator login and search flow:
+**Goal:** A separate non-admin can search Prowlarr, add torrents through Transmission, organize their own downloads and pause/resume them, **without** managing other users or the server.
 
-1. Open **aMuTorrent → Settings → User Management → Add User**.
-2. Create a separate account and select **Custom** capabilities (not the **Read Only** preset, which includes viewing all downloads). Enable `search` and `add_downloads`; optionally `pause_resume`, `remove_downloads` and `view_history` depending on how much control you want that user to have.
-3. **Do not grant admin, view-all, edit-all, manage-system-configuration or logs permissions** to the restricted account.
-4. Test in a private session that the account can search/add but cannot change other users' downloads, global settings or Prowlarr administration.
+1. Sign in as an admin. Open **Settings → User Management → Add User** (or **Edit User** for an existing account).
+2. Give the person their own username and password, keep **Admin** **off**, and choose **Custom** (not **Full** or **Read-only**).
+3. Select the following checkboxes and **Save Changes**:
 
-Sharing a Tailscale service requires appropriate tailnet access rules. Application permissions do **not** create separate storage quotas or isolate the underlying Transmission downloads.
+   | Enable | Leave disabled |
+   | --- | --- |
+   | **Search indexers** (`search`) | **Remove downloads** (`remove_downloads`), unless the user should delete their own |
+   | **Add downloads** (`add_downloads`) | **Move files**, **Rename files** |
+   | **Pause / resume** (`pause_resume`) | **Manage categories** |
+   | **Assign categories** (`assign_categories`) | **Set rating & comment** (aMule-specific; unnecessary for BitTorrent) |
+   | | **View history**, **Clear history**, **View logs** |
+   | | **View shared files**, **View uploads**, **View statistics** |
+   | | **Manage ED2K servers** |
+   | | **View all users' downloads**, **Edit all users' downloads** |
+
+4. Test the account in a **private browser session**: sign in, search via **Prowlarr**, add a legal test torrent, confirm it appears in **their** Downloads, and pause/resume it. Confirm that admin Settings and other users' downloads are not visible/editable.
+5. Optionally allow **Remove downloads** to let them remove their **own** torrents. Check whether the removal dialog also deletes downloaded data before granting it.
+
+**Important privacy detail (aMuTorrent v3.9.8):** The **View history** permission permits the history API, which does **not** filter entries by the logged-in owner's ID; leave it off if other users' history should be private. **Clear history** permits deletion of history entries. **Manage categories** edits global categories, while **Assign categories** only permits assigning an existing category to a download. The **Read-only** preset grants **View all users' downloads**, so do not use it for a private restricted account. See [upstream user permissions](https://github.com/got3nks/amutorrent/blob/v3.9.8/docs/USERS.md) and [history route](https://github.com/got3nks/amutorrent/blob/v3.9.8/server/modules/historyAPI.js).
+
+**Limits:** aMuTorrent's user permissions do **not** create disk quotas, separate Transmission storage or enforce access controls on Transmission's own web UI. Protect Transmission credentials separately, and allow the person only the intended HTTPS service in your Tailscale policy.
 
 ## 8. Final checks and remaining manual work
 

@@ -45,7 +45,7 @@ aMuTorrent -> Transmission RPC on 127.0.0.1:9091 (same namespace)
 ```
 
 - Keep `4000` un-published to LAN/WAN. Prowlarr `9696` is host-loopback-only for SSH forwarding. Public Tailscale Funnel is disabled.
-- Require aMuTorrent login before sharing access; its default is unauthenticated. Create a non-admin user with `search`, `add_downloads` and only the desired management capabilities. Do not grant `view_all_downloads`, `edit_all_downloads` or `view_logs` unless necessary.
+- Require aMuTorrent login before sharing access; its default is unauthenticated. For a limited non-admin user, enable only `search`, `add_downloads`, `pause_resume`, and optionally `assign_categories`. Leave `view_all_downloads`, `edit_all_downloads`, `view_logs`, `manage_categories`, `clear_history`, and `view_history` disabled. In aMuTorrent v3.9.8 the history API does not apply per-user ownership filtering. See the [manual restricted-user checklist](AMUTORRENT-SETUP.md#7-in-amutorrent-create-a-limited-but-usable-account).
 - Restrict your brother's Tailscale access using tailnet policy as appropriate. aMuTorrent permissions do not isolate storage or enforce per-user disk quotas; shared Transmission can still fill disks.
 - Transmission is already authenticated. Do not commit its password or Prowlarr's API key; configure both within aMuTorrent's authenticated Settings UI.
 

@@ -32,10 +32,10 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_watchtower*.py' -v
           docker compose -f docker/watchtower/compose.yml config --quiet
           mkdir -p docker/privacy/transmission-brother
-          printf 'USER=testuser\\nPASS=testpass\\n' > docker/privacy/transmission-brother/auth.env
-          TRANSMISSION_BROTHER_PEER_PORT=25046 docker compose \\
-            -f docker/privacy/compose.yml \\
-            -f docker/privacy/compose.transmission-brother.yml \\
+          printf 'USER=testuser\nPASS=testpass\n' > docker/privacy/transmission-brother/auth.env
+          TRANSMISSION_BROTHER_PEER_PORT=25046 docker compose \
+            -f docker/privacy/compose.yml \
+            -f docker/privacy/compose.transmission-brother.yml \
             config --quiet
           systemd-analyze calendar '*-*-* 05:00:00 America/New_York'
   live-docker:

@@ -1,5 +1,28 @@
 # Watchtower operations and historical verification
 
+## Live 28-container enrollment verified (October 29, 2026)
+
+**Host-confirmed successful deployment:** On `openmediavault`, the operator ran the pinned, guarded `enroll_existing_28.py --check`, then `--apply`. The helper validated the original exact 24-target Watchtower command/private manifest, Compose provenance, healthy Gluetun and all present clients, and the proposed 28-target Compose configuration before writing anything. It then changed **only** the private `/docker/watchtower-fork/compose.yml`, root-private `targets.json`, and installed `watchtower_verify.py`, and recreated **only** the `watchtower` container.
+
+- **Independent verification passed twice**, including a separate `python3 /docker/watchtower-fork/watchtower_verify.py --verify`: `28 healthy targets`.
+- Watchtower is `running` with image `nickfedor/watchtower:1.23.1`. The 05:00 `watchtower-fork-verify.timer` remains `active`; its service and SMTP configuration were untouched.
+- The helper confirmed that existing application container IDs/states did not change. **No Gluetun, original Transmission, TRAWL, aMuTorrent, Prowlarr, or Tailscale service was recreated.**
+- Root-private rollback backup: `/root/awtserver-watchtower-enrollment/20261029T181404Z` (contains the three replaced files). Retain it for manual recovery. This is a **host path**, not a checked-in secret.
+- The selected policy is **24 → 28**, adding only `amutorrent`, `prowlarr`, `trawl` and `tailscale-amutorrent`. The server retains **one Transmission**. The unused [second-instance design](../../docs/optional/transmission-brother/OPERATIONS.md) is archived and is **not** enrolled.
+- This resolves the earlier `Unapproved additional Gluetun namespace user: trawl` verification failure. **A complete unattended update of the expanded 28-app set, followed by the next 05:00 verification, has not yet been observed.** The verifier detects failures; it does not guarantee automatic rollback of failed application updates.
+
+**Completed prerequisites:** The operator separately migrated TRAWL from standalone to the `privacy` Compose service (without changing Gluetun or Transmission IDs), verified Prowlarr's matching `cloudflare` tags and 1337x `ubuntu` search (80 results, one TRAWL success and zero failures), and identity-checked/deleted the stopped standalone TRAWL backup while preserving its root-only inspect JSON.
+
+### Recovery and implementation
+
+The reviewed [enrollment helper](enroll_existing_28.py) was a **one-time 24→28 migration**. Its read-only `--check` and scoped `--apply` both require the **original** exact 24-target command/manifest, so **do not rerun either against the successfully updated 28-target installation**. For subsequent status checks, use the installed read-only `watchtower_verify.py --verify`. For recovery, inspect the current live state and the root-private backup first; do not blindly restore an old 24-target allowlist, which would reinstate the unselected VPN-client verification failure.
+
+The helper's apply mode used exact Compose provenance and health guards, atomically replaced the three private files, and invoked `docker compose ... up -d --no-deps --no-build --pull never watchtower`. A failure would have triggered a best-effort rollback to the original 24 targets; no such rollback was needed in the successful operator output. Watchtower remains scheduled for `0 45 2 * * *` (02:45 America/New_York), with independent 05:00 verification. No live-update outcome is implied by the guarded helper or GitHub CI.
+
+
+---
+
+
 **2026-10-21 update:** The server operator reports a successful overnight Watchtower update with applications remaining up. Earlier October 20 verification caveats below are historical snapshots.
 
 ---

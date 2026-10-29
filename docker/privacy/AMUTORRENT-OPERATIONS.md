@@ -2,6 +2,14 @@
 
 aMuTorrent provides multi-user, browser-based torrent search and download management; Prowlarr supplies search indexes and existing Transmission remains the download engine. The two UIs serve different audiences: only aMuTorrent is shared with non-admin users.
 
+## 2026-10-29 TRAWL migration completed (host-confirmed)
+
+The operator ran the guarded `migrate_trawl.py` helper. After the first attempt's immediate health check failed and reverted, the corrected bounded-wait helper successfully created `trawl` as a **Compose-managed** service in project `privacy`, sharing the unchanged Gluetun namespace. Docker inspect reports project/service `privacy`/`trawl`, and `http://127.0.0.1:8191/health` returned `"status":"ok"` with one live browser worker. Gluetun and Transmission container IDs were unchanged.
+
+The original container `trawl-standalone-backup-20261029t172518z` was identity-checked and removed after successful integration testing. Its root-only Docker inspection backup remains at `/root/awtserver-trawl-migration/trawl-standalone-backup-20261029t172518z.json`. The live overlay was installed at `/docker/privacy/compose.trawl.yml`. The privacy directory and `compose.override.yml` had world-write removed (`2775`/`0664`), without stripping named ACL entries.
+
+**Functional verification passed:** the operator's read-only Prowlarr API check confirmed saved `cloudflare` tags on the TRAWL proxy and 1337x indexer; a 1337x `ubuntu` search returned **80 results**; recent TRAWL logs contained **one `request.success` and zero `request.failure` events**. The stopped original container **was subsequently removed** after matching its ID against the root-only saved Docker inspection, checking it was exited with restart disabled, and confirming the replacement TRAWL and Gluetun were healthy. The saved inspection JSON remains. Original Transmission and Gluetun were not changed. **Later October 29 host update:** Watchtower was successfully enrolled from 24 to 28 targets (adding `amutorrent`, `prowlarr`, Compose-managed `trawl`, and `tailscale-amutorrent`), with no other application container ID/state changes. The installed independent verifier reported `28 healthy targets` twice and the 05:00 timer remained active. The root-private enrollment backup is `/root/awtserver-watchtower-enrollment/20261029T181404Z`. No second Transmission was deployed; the first unattended update of the expanded policy remains unobserved. See [Watchtower operations](../watchtower/OPERATIONS.md).
+
 ## Current OMV observation (2026-10-29)
 
 These are **dated host observations**, not guarantees about another installation or a future server state.
@@ -27,7 +35,7 @@ For any other host, inspect owners, ACLs, application user and bind mounts first
 
 - [Manual application setup](AMUTORRENT-SETUP.md): first-time web UI steps, Prowlarr authentication, TRAWL proxy and tag setup, 1337x troubleshooting, aMuTorrent wizard and restricted users.
 - `docker/privacy/compose.amutorrent.yml`: optional privacy Compose overlay, not an independent stack. Its Gluetun firewall ports reflect the inspected trial only; merge with the live port list instead of replacing additional existing ports.
-- `docker/privacy/compose.trawl.yml`: **optional future Compose-managed TRAWL service**. The current OMV `trawl` is a standalone container, so do not activate this overlay without a migration plan. Port 8191 stays internal and does not need a Gluetun input firewall exception for shared-loopback traffic.
+- `docker/privacy/compose.trawl.yml`: Compose-managed TRAWL service. The OMV operator confirmed migration of `trawl` to the `privacy` project; the live overlay at `/docker/privacy/compose.trawl.yml` must be included in future effective Compose configurations. Port 8191 stays internal and does not need a Gluetun input firewall exception for shared-loopback traffic.
 - `docker/pihole/compose.amutorrent.yml`: nginx certificate directory overlay, to append to the **complete** existing Pi-hole Compose file list.
 - `docker/pihole/conf.d/amutorrent.conf`: local HTTPS proxy example (replace the example domain).
 - `docker/pihole/compose_example.yml`: includes an example DNS host record and certificate mount for a clean deployment.

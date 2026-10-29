@@ -60,3 +60,9 @@ Torrent search and downloads behind Gluetun, including 1337x Cloudflare handling
 - Optional Compose examples: [aMuTorrent + Prowlarr](compose.amutorrent.yml) and [TRAWL](compose.trawl.yml).
 
 Don't deploy example overlays over the running host without comparing its current active Compose configuration.
+
+## Transmission and TRAWL
+
+The standard privacy stack uses **one Transmission instance**. TRAWL is Compose-managed on the verified OMV host; the [guarded TRAWL migration helper](migrate_trawl.py) is retained for recovery/reference.
+
+An [optional second-Transmission design](../../docs/optional/transmission-brother/OPERATIONS.md) is archived for reference only and is not part of the default configuration.

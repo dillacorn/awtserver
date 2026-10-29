@@ -246,6 +246,8 @@ def apply(source, base, target, gluetun):
         raise
     print("PASS: Only TRAWL migrated to privacy Compose")
     print("Original stopped backup container:", old_name)
+    print("IMPORTANT: Watchtower cannot enroll while this stopped original still shares Gluetun.")
+    print("After independent Prowlarr/TRAWL checks, remove ONLY that named stopped backup container.")
     print("Original inspect backup (root-only):", backup_file)
     print("Keep the new overlay in all future privacy Compose commands:", target)
     print("Watchtower remains on its ORIGINAL 24-target policy until full enrollment.")

@@ -32,16 +32,13 @@ EXPECTED = frozenset({
     "transmission",
 })
 
-# All-or-nothing original 24 and expanded 30 target policies.
-# Six additional targets require Compose-managed TRAWL.
-ADDITIONAL = frozenset({
-    "amutorrent", "prowlarr", "trawl", "transmission-brother",
-    "tailscale-amutorrent", "tailscale-transmission-brother",
-})
+# All-or-nothing original 24 and current 28 target policies.
+# Only deployed applications are eligible; no second Transmission by default.
+ADDITIONAL = frozenset({"amutorrent", "prowlarr", "trawl", "tailscale-amutorrent"})
 EXPANDED = EXPECTED | ADDITIONAL
 GLUETUN_CLIENTS = frozenset({
     "transmission", "mullvad-browser", "amutorrent", "prowlarr",
-    "trawl", "transmission-brother",
+    "trawl",
 })
 
 
@@ -83,12 +80,12 @@ def read_targets(root=ROOT):
     need(path.stat().st_mode & 0o077 == 0, "Target manifest permissions too open")
     manifest = json.loads(path.read_text())
     names = manifest.get("container_names")
-    need(isinstance(names, list) and len(names) in (24, 30) and
+    need(isinstance(names, list) and len(names) in (24, 28) and
          all(isinstance(n, str) and
              re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", n) for n in names) and
          set(names) in (EXPECTED, EXPANDED) and
          manifest.get("schedule") == SCHEDULE,
-         "Watchtower manifest does not match approved 24/30-target policy")
+         "Watchtower manifest does not match approved 24/28-target policy")
     return names
 
 
@@ -219,7 +216,7 @@ def check_dependencies(fleet, names):
 
 def verify_runtime(fleet, names):
     need(len(names) == len(set(names)) and set(names) in (EXPECTED, EXPANDED),
-         "Expected approved 24/30 Watchtower services are not enrolled")
+         "Expected approved 24/28 Watchtower services are not enrolled")
     updater = fleet.get("watchtower")
     need(updater and state(updater) == "running", "Watchtower daemon not running")
     cmd = updater.get("Config", {}).get("Cmd") or []

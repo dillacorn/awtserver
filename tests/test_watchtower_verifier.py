@@ -69,7 +69,7 @@ class StandaloneVerifierTests(unittest.TestCase):
             wt.verify_runtime(all_containers, names)
 
 
-    def test_30_targets_and_standalone_trawl_is_rejected(self):
+    def test_28_targets_and_standalone_trawl_is_rejected(self):
         all_containers, names = fleet()
         parent = all_containers["gluetun"]["Id"]
         for name in wt.ADDITIONAL:
@@ -84,6 +84,15 @@ class StandaloneVerifierTests(unittest.TestCase):
         self.assertEqual(wt.verify_runtime(all_containers, names), names)
         all_containers["trawl"]["Config"]["Labels"] = {}
         with self.assertRaisesRegex(wt.Stop, "missing Compose project/service"):
+            wt.verify_runtime(all_containers, names)
+
+    def test_unapproved_second_transmission_is_rejected(self):
+        all_containers, names = fleet()
+        parent = all_containers["gluetun"]["Id"]
+        all_containers["transmission-brother"] = make_container(
+            "transmission-brother", network="container:" + parent
+        )
+        with self.assertRaisesRegex(wt.Stop, "additional Gluetun namespace"):
             wt.verify_runtime(all_containers, names)
 
     def test_original_targets_reject_unenrolled_trawl(self):
@@ -129,7 +138,7 @@ class StandaloneVerifierTests(unittest.TestCase):
             private.chmod(0o600)
             manifest.write_text(json.dumps({"schedule": wt.SCHEDULE,
                                             "container_names": ["app-ntfy"]}))
-            with self.assertRaisesRegex(wt.Stop, "24/30-target policy"):
+            with self.assertRaisesRegex(wt.Stop, "24/28-target policy"):
                 wt.read_targets(root)
 
     def test_smtp_mandatory_tls(self):

@@ -1,4 +1,6 @@
-# Optional addition to the running privacy Compose project, never a standalone stack.
+# Archived example only. NOT part of default privacy configuration.
+# The operator decided to retain one Transmission instance (2026-10-29).
+# Never deploy without a new explicit request and independent review.
 # Review host files first; the existing Gluetun firewall is NOT changed here.
 # Pre-create settings.json with rpc-port=9092 before starting Transmission.
 configs:

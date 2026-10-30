@@ -1,0 +1,27 @@
+# Candidate replacement for Transmission on the observed OMV privacy host.
+# STAGING SOURCE ONLY: do not start this service until the live Gluetun
+# namespace, Watchtower verifier, ports, mounts, and migration state are checked.
+# Append after ALL existing Compose files; do not replace them.
+services:
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "${TZ:-America/New_York}"
+      WEBUI_PORT: "${QBITTORRENT_WEBUI_PORT:?Set a verified free WebUI port}"
+      TORRENTING_PORT: "${QBITTORRENT_STAGING_PEER_PORT:?Set a verified peer port distinct from Transmission}"
+    volumes:
+      - /docker/privacy/qbittorrent/config:/config
+      - /srv/mergerfs/data/root/downloads:/downloads
+      - /srv/mergerfs/data/root/Movies:/Movies
+      - /srv/mergerfs/data/root/Shows:/Shows
+      - /srv/mergerfs/data/root/AudioBooks:/AudioBooks
+      - /srv/mergerfs/data/root/Books:/Books
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    network_mode: "service:gluetun"
+    stop_grace_period: 120s
+    restart: unless-stopped

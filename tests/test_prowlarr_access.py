@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "docker/privacy"))
@@ -62,6 +63,51 @@ class AccessTests(unittest.TestCase):
                 "192.168.68.10 amutorrent.time-puffin.ts.net"}}}
             with self.assertRaisesRegex(p.Stop, "exactly one"):
                 p.locate_dns([path], "time-puffin.ts.net", current)
+
+    def test_dnsproxy_quad9_is_matched_by_namespace_and_compose_service(self):
+        # Observed host: Docker container name differs from Compose service.
+        parent = {"Id": "a" * 64}
+        container = {
+            "Name": "/dnsproxy-quad9",
+            "HostConfig": {"NetworkMode": "container:" + parent["Id"]},
+            "State": {"Status": "running"},
+            "Config": {"Labels": {
+                "com.docker.compose.project": "pihole",
+                "com.docker.compose.service": "dnsproxy"
+            }},
+        }
+        files = [Path("/docker/pihole/compose.yml")]
+        with patch.object(p, "files_from_container", return_value=files):
+            self.assertEqual(
+                p.identify_pi_proxy(
+                    parent, [container],
+                    {"dnsproxy": {"network_mode": "service:pihole"}}, files),
+                ("dnsproxy-quad9", "dnsproxy"))
+
+    def test_unknown_pihole_namespace_dependent_rejected(self):
+        parent = {"Id": "b" * 64}
+        unknown = {
+            "Name": "/unexpected",
+            "HostConfig": {"NetworkMode": "container:" + parent["Id"]},
+            "State": {"Status": "running"},
+            "Config": {"Labels": {}},
+        }
+        with self.assertRaisesRegex(p.Stop, "Unexpected container"):
+            p.identify_pi_proxy(parent, [unknown], {}, [])
+
+    def test_missing_proxy_service_rejected(self):
+        parent = {"Id": "c" * 64}
+        existing = {
+            "Name": "/dnsproxy-quad9",
+            "HostConfig": {"NetworkMode": "container:" + parent["Id"]},
+            "State": {"Status": "running"},
+            "Config": {"Labels": {
+                "com.docker.compose.project": "pihole",
+                "com.docker.compose.service": "dnsproxy"
+            }},
+        }
+        with self.assertRaisesRegex(p.Stop, "absent from active Compose"):
+            p.identify_pi_proxy(parent, [existing], {}, [])
 
     def test_changed_unrelated_services_blocked(self):
         with self.assertRaisesRegex(p.Stop, "Unrelated service changed"):

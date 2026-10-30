@@ -6,13 +6,15 @@ sidecar, brings back the SAME existing Transmission container, and restores
 the original exact-28 Watchtower files from the 29-target transition backup.
 
 Requires an explicit --backup-dir from the successful transition output.
-No files or containers are deleted, no download payloads touched. Existing
+Only the stopped qBittorrent container is removed with explicit authorization;
+its /config bind mount and all torrent payloads remain untouched. Existing
 Pi-hole records/cert mounts and independent Tailscale identities remain.
 """
 import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import stat
@@ -79,7 +81,7 @@ def parse(raw):
 
 def check_backup(directory):
     need(directory.parent == BACKUP_ROOT and
-         directory.name.isdigit() and len(directory.name) == 16 and
+         re.fullmatch(r"[0-9]{8}T[0-9]{6}Z", directory.name) and
          directory.is_dir() and not directory.is_symlink(),
          "Backup must be the original timestamped Watchtower transition backup")
     need(directory.stat().st_uid == 0 and
@@ -145,6 +147,18 @@ def preflight(backup_dir):
          fleet["qbittorrent"]["HostConfig"]["NetworkMode"] ==
          "container:" + gluetun["Id"],
          "Clients must belong to the same current Gluetun parent")
+    qbit = fleet["qbittorrent"]
+    labels = qbit["Config"].get("Labels") or {}
+    need(labels.get("com.docker.compose.project") == "privacy" and
+         labels.get("com.docker.compose.service") == "qbittorrent",
+         "qBittorrent is not the expected privacy Compose container")
+    mounts = {m["Destination"]: m for m in qbit["Mounts"]}
+    need(mounts.get("/config", {}).get("Source") ==
+         "/docker/privacy/qbittorrent/config" and
+         mounts["/config"].get("Type") == "bind",
+         "qBittorrent /config must remain a persistent bind mount")
+    need(not qbit["HostConfig"].get("PortBindings"),
+         "qBittorrent has unexpected host port bindings")
     for name, expected in EXPECTED_RESTARTS.items():
         actual = fleet[name]["HostConfig"]["RestartPolicy"]["Name"]
         need(actual == expected,
@@ -201,7 +215,7 @@ def assert_running_state(name, running):
          f"{name}: unexpected running state")
 
 
-def apply(original, old_names, current_files, protected):
+def apply(original, old_names, current_files, protected, allow_remove):
     # Check the current manifest again before the first state change.
     need(check_current()[0] == current_files,
          "Live Watchtower files changed after preflight")
@@ -214,6 +228,24 @@ def apply(original, old_names, current_files, protected):
     run("docker", "update", "--restart", "no", "tailscale-qbittorrent")
     run("docker", "stop", "--timeout", "45", "tailscale-qbittorrent", timeout=75)
     assert_running_state("tailscale-qbittorrent", False)
+
+    # The legacy Watchtower verifier rejects *all* unselected Gluetun
+    # children, even stopped ones. Remove only the stopped, identity-checked
+    # ephemeral qBittorrent container, never -v or any persistent data.
+    # Recreate it later from Compose if switching back to qBittorrent.
+    need(allow_remove, "Stopped qBittorrent container must be removed for the original "
+         "28-target verifier. Re-run with --allow-remove-container only if approved.")
+    saved_qbit = inventory()["qbittorrent"]
+    need(saved_qbit["State"]["Status"] == "exited" and
+         saved_qbit["Config"].get("Labels", {}).get(
+             "com.docker.compose.service") == "qbittorrent" and
+         {m["Destination"]: m for m in saved_qbit["Mounts"]}.get(
+             "/config", {}).get("Source") ==
+         "/docker/privacy/qbittorrent/config",
+         "Cannot safely remove the staged qBittorrent container")
+    run("docker", "rm", "qbittorrent")
+    need("qbittorrent" not in inventory(),
+         "Stopped qBittorrent container still present")
 
     # The existing Transmission container and all its persistent mounts are
     # unchanged: restore its prior restart policy and start the original ID.
@@ -250,11 +282,15 @@ def main():
     flags = parser.add_mutually_exclusive_group()
     flags.add_argument("--check", action="store_true")
     flags.add_argument("--apply", action="store_true")
+    parser.add_argument("--allow-remove-container", action="store_true",
+                        help="Explicitly permit removing ONLY the stopped qBittorrent container, never volumes")
     args = parser.parse_args()
     try:
         original, names, current, protected = preflight(args.backup_dir)
         if args.apply:
-            apply(original, names, current, protected)
+            need(args.allow_remove_container,
+                 "Rollback requires explicit --allow-remove-container; persistent data is preserved")
+            apply(original, names, current, protected, args.allow_remove_container)
         else:
             print("READ-ONLY PASS: no changes made")
         return 0

@@ -1,0 +1,7 @@
+# Optional local HTTPS certificate bind mount for a new qBittorrent machine.
+# Append to ALL existing live Pi-hole Compose overlays. Do not replace them.
+# Only recreate nginx after the certificate exists and nginx -t succeeds.
+services:
+  nginx:
+    volumes:
+      - /docker/privacy/ts/qbittorrent/state/certs:/etc/nginx/qbittorrent-certs:ro

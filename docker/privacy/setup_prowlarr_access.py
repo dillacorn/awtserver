@@ -262,7 +262,7 @@ def preflight(template_dir):
     print("Current Pi-hole Compose files:", ", ".join(p.name for p in pfiles))
     print("Auth key:", key_status, "(contents never displayed)")
     return (template_files, privfiles, pfiles, pcompose, dns_path,
-            dns_edited, new_domain, lan_ip)
+            dns_path.read_bytes(), dns_edited, new_domain, lan_ip)
 
 
 def atomic(path, content, original=None):
@@ -378,7 +378,8 @@ def recycle_pi(files):
 
 
 def apply(context):
-    templates, privfiles, pfiles, old_pi, dns_path, dns_text, hostname, lan_ip = context
+    (templates, privfiles, pfiles, old_pi, dns_path,
+     saved_dns_bytes, dns_text, hostname, lan_ip) = context
     need(AUTH.is_file() and not AUTH.is_symlink() and
          AUTH.stat().st_uid == 0 and
          stat.S_IMODE(AUTH.stat().st_mode) & 0o077 == 0 and
@@ -451,6 +452,8 @@ def apply(context):
     backup = BACKUP / (stamp + "-" + str(os.getpid()))
     backup.mkdir(mode=0o700)
     original = dns_path.read_bytes()
+    need(original == saved_dns_bytes,
+         "Pi-hole source changed since the read-only preflight")
     (backup / "pihole-original.yml").write_bytes(original)
     (backup / "source-path.txt").write_text(str(dns_path) + "\n")
     (backup / "pihole-original.yml").chmod(0o600)

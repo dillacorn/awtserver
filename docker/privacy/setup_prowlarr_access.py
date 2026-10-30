@@ -160,6 +160,32 @@ def locate_dns(files, domain, current):
     return origin, edited, new_record, ip
 
 
+def identify_pi_proxy(parent, containers, services, pfiles):
+    dependents = [c for c in containers
+                  if c["HostConfig"].get("NetworkMode") ==
+                  "container:" + parent["Id"]]
+    need(len(dependents) == 1,
+         "Expected exactly one known Pi-hole namespace dependent")
+    client = dependents[0]
+    client_name = client["Name"].lstrip("/")
+    need(client_name in ("dnsproxy", "dnsproxy-quad9"),
+         "Unexpected container attached to Pi-hole namespace")
+    need(client["State"]["Status"] == "running",
+         "Pi-hole DNS proxy dependent is not running")
+    need(labels(client).get("com.docker.compose.project") == "pihole",
+         "Pi-hole DNS proxy has unexpected Compose project")
+    service_name = labels(client).get("com.docker.compose.service")
+    need(service_name in ("dnsproxy", "dnsproxy-quad9"),
+         "Pi-hole DNS proxy has unexpected Compose service")
+    need(service_name in services,
+         "Pi-hole DNS proxy service is absent from active Compose")
+    need(services[service_name].get("network_mode") == "service:pihole",
+         "Pi-hole DNS proxy Compose service is not namespace-dependent")
+    need(files_from_container(client, "pihole") == pfiles,
+         "Pi-hole DNS proxy uses different Compose file provenance")
+    return client_name, service_name
+
+
 def preflight(template_dir):
     need(os.geteuid() == 0 and socket.gethostname() == "openmediavault",
          "Root on openmediavault required")
@@ -212,35 +238,14 @@ def preflight(template_dir):
     pcompose = effective(pfiles, PI, "pihole")
     need("pihole" in pcompose and "nginx" in pcompose,
          "Expected pihole and nginx services not in Compose")
-    # The OMV server uses dnsproxy-quad9, not a container named dnsproxy.
-    # Find the *actual* dependent of Pi-hole's network namespace, then
-    # independently validate its Compose project, service and original files.
+    # Inspect the real Docker namespace dependency rather than assuming a
+    # container named dnsproxy. Live OMV uses dnsproxy-quad9.
     all_ids = run(["docker", "ps", "-aq"], timeout=20).stdout.split()
     need(all_ids, "Docker inventory is empty")
     all_containers = json.loads(run(["docker", "inspect", *all_ids],
                                     timeout=90).stdout)
-    dependents = [c for c in all_containers
-                  if c["HostConfig"].get("NetworkMode") ==
-                  "container:" + existing["pihole"]["Id"]]
-    need(len(dependents) == 1,
-         "Expected exactly one known Pi-hole namespace dependent")
-    client = dependents[0]
-    client_name = client["Name"].lstrip("/")
-    need(client_name in ("dnsproxy", "dnsproxy-quad9"),
-         "Unexpected container attached to Pi-hole namespace")
-    need(client["State"]["Status"] == "running",
-         "Pi-hole DNS proxy dependent is not running")
-    need(labels(client).get("com.docker.compose.project") == "pihole",
-         "Pi-hole DNS proxy has unexpected Compose project")
-    service_name = labels(client).get("com.docker.compose.service")
-    need(service_name in ("dnsproxy", "dnsproxy-quad9"),
-         "Pi-hole DNS proxy has unexpected Compose service")
-    need(service_name in pcompose,
-         "Pi-hole DNS proxy service is absent from active Compose")
-    need(pcompose[service_name].get("network_mode") == "service:pihole",
-         "Pi-hole DNS proxy Compose service is not namespace-dependent")
-    need(files_from_container(client, "pihole") == pfiles,
-         "Pi-hole DNS proxy uses different Compose file provenance")
+    client_name, service_name = identify_pi_proxy(
+        existing["pihole"], all_containers, pcompose, pfiles)
     domain = tailnet_suffix()
     dns_path, dns_edited, new_domain, lan_ip = locate_dns(
         pfiles, domain, pcompose)

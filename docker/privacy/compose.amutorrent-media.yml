@@ -1,9 +1,11 @@
-# Only two extra paths for the existing aMuTorrent container.
-# Needed to clear CategoryModal read+write access warnings for /Movies and /Shows.
-# Add after all currently active privacy Compose overlays; recreate only amutorrent.
-# This intentionally does not change /downloads or any other service.
+# Add category paths for the existing aMuTorrent service only.
+# Keep the original Movies/Shows mounts, and add AudioBooks/Music.
+# Append this file after compose.trawl.yml in the complete privacy Compose set.
+# No changes to Transmission, Gluetun, Watchtower or default downloads.
 services:
   amutorrent:
     volumes:
       - /srv/mergerfs/data/root/Movies:/Movies:rw
       - /srv/mergerfs/data/root/Shows:/Shows:rw
+      - /srv/mergerfs/data/root/AudioBooks:/AudioBooks:rw
+      - /srv/mergerfs/data/root/Music:/Music:rw

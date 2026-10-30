@@ -36,15 +36,13 @@ EXPECTED = frozenset({
 # Only deployed applications are eligible; no second Transmission by default.
 ADDITIONAL = frozenset({"amutorrent", "prowlarr", "trawl", "tailscale-amutorrent"})
 EXPANDED = EXPECTED | ADDITIONAL
-# A separate qBittorrent Tailscale identity remains alongside the old
-# Transmission machine during a reversible migration. The old Tailscale
-# machine is retired only after independent checks and user approval.
+# The old tailscale-transmission sidecar is NOT in the existing Watchtower
+# allowlist. It may remain running as a separate machine during migration,
+# but must not be described as monitored by this policy.
 QBIT_TRANSITION = (EXPANDED - {"transmission"}) | {
     "qbittorrent", "tailscale-qbittorrent",
 }
-QBIT_FINAL = QBIT_TRANSITION - {"tailscale-transmission"}
-APPROVED = frozenset({EXPECTED, EXPANDED, frozenset(QBIT_TRANSITION),
-                      frozenset(QBIT_FINAL)})
+APPROVED = frozenset({EXPECTED, EXPANDED, frozenset(QBIT_TRANSITION)})
 GLUETUN_CLIENTS = frozenset({
     "transmission", "qbittorrent", "mullvad-browser", "amutorrent",
     "prowlarr", "trawl",

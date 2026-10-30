@@ -86,9 +86,9 @@ The host now has a dedicated `/docker/privacy/compose.amutorrent-media.yml` over
 
 **Operator-confirmed application (2026-10-29):** The pinned sources and Python syntax verified. Both `--check` and `--apply` reported the original four-file effective Compose services unchanged except the two aMuTorrent mounts; after the scoped recreation, aMuTorrent confirmed both paths readable/writable, application health passed, and all other container identities and states were preserved. The live overlay is now `/docker/privacy/compose.amutorrent-media.yml`. **Whether the yellow warnings disappeared in the browser is not yet confirmed**; refresh the aMuTorrent categories to check. The unmounted `/downloads/transmission/complete` default category path may also need a **separate** mount if a warning appears; no broad `/downloads` write access was added.
 
-## aMuTorrent AudioBooks/Music extension (candidate, not deployed)
+## aMuTorrent AudioBooks/Music extension (host applied 2026-10-30)
 
-**Read-only host inspection (2026-10-29):** the existing `amutorrent` container, project/service `privacy/amutorrent`, is running with **only** `/Movies`, `/Shows`, application data, and logs mounts. Transmission is running with an existing writable `/AudioBooks` mount, but no `/Music` mount. Both `/srv/mergerfs/data/root/AudioBooks` and `/srv/mergerfs/data/root/Music` exist as real directories (not symlinks). The mergerfs Music directory needs no change to Transmission.
+**Read-only host inspection (2026-10-29):** the existing `amutorrent` container, project/service `privacy/amutorrent`, is running with **only** `/Movies`, `/Shows`, application data, and logs mounts. Transmission is running with an existing writable `/AudioBooks` mount, but no `/Music` mount. Both `/srv/mergerfs/data/root/AudioBooks` and `/srv/mergerfs/data/root/Music` exist as real directories (not symlinks). The Music directory itself exists; Transmission separately needs the /Music bind mount described below.
 
 The updated `compose.amutorrent-media.yml` keeps the working `/Movies` and `/Shows` mounts and appends **only** `/AudioBooks` and `/Music` as writable bind mounts for aMuTorrent category-path validation. It does not add `/Books` or change `/downloads`, torrent settings, host directory permissions, Gluetun, Watchtower, Pi-hole, or any other service.
 
@@ -99,6 +99,8 @@ The one-time host helper `extend_amutorrent_media.py` is **not** the initial two
 **Category destination caveat (same host inspection):** Transmission already has `/AudioBooks` mounted writable, so the aMuTorrent **AudioBooks** category should use the Transmission-visible path `/AudioBooks` once the aMuTorrent mount check passes. However, the inspected Transmission container has **no** `/Music` bind mount, even though the host mergerfs `Music` directory exists. Adding `/Music` to aMuTorrent only satisfies aMuTorrent's path check; it does **not** let Transmission download there. Do not configure an aMuTorrent Music category to save to `/Music` until a separate, explicitly scoped Transmission bind-mount change is verified and applied. That Transmission change is **not** part of this PR or the currently merged helper.
 
 **Operator confirmation is still required.** A valid directory on the host does not prove the aMuTorrent process has effective read/write access under mergerfs ACLs. Do not claim browser warnings are resolved until the operator confirms. Retain `compose.amutorrent-media.yml` as the fifth and last privacy Compose file on future updates. Only the aMuTorrent process receives additional writable library access; restrict users appropriately.
+
+**Confirmed 2026-10-30:** The operator ran the revised pinned aMuTorrent extension. It reported all four mounts writable, aMuTorrent health restored, and all unrelated container identities/states preserved. The active fifth privacy Compose overlay is `/docker/privacy/compose.amutorrent-media.yml`. This remains independent of the proposed Transmission Music overlay.
 
 ## Transmission Music destination (prepared 2026-10-30; host application pending)
 

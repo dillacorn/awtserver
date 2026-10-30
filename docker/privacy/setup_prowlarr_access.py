@@ -519,6 +519,27 @@ def apply(context):
                   file=sys.stderr)
         print("Backup:", backup, file=sys.stderr)
         raise Stop("Local HTTPS setup not completed") from problem
+    # Remove the bootstrap key from disk and from the running container's
+    # environment. The persisted Tailscale state authenticates restarts.
+    try:
+        need(AUTH.is_file() and not AUTH.is_symlink() and
+             AUTH.read_text().startswith("TS_AUTHKEY="),
+             "Bootstrap authkey file changed during setup")
+        atomic(AUTH, b"", original=AUTH.read_bytes())
+        compose([*privfiles, SIDECAR], PRIV, "privacy", "up", "-d",
+                "--no-deps", "--force-recreate", "--no-build", "--pull",
+                "never", "tailscale-prowlarr")
+        wait_tailnet("tailscale-prowlarr", hostname)
+        current = inspect("tailscale-prowlarr")
+        env_names = {x.split("=", 1)[0] for x in
+                     (current["Config"].get("Env") or [])}
+        need("TS_AUTHKEY" not in env_names,
+             "Bootstrap auth key still present in container environment")
+        print("PASS: Bootstrap auth key cleared from file and container environment")
+    except Exception:
+        print("WARNING: Verify/revoke bootstrap auth key in Tailscale admin; "
+              "automatic credential scrubbing was not confirmed",
+              file=sys.stderr)
     print("PASS: Pi-hole DNS and local nginx HTTPS respond correctly")
     print("PASS: Existing privacy services and VPN unchanged")
     print("Private HTTPS:", "https://" + hostname)

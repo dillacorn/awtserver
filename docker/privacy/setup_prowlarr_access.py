@@ -209,8 +209,26 @@ def preflight(template_dir):
     need(all(str(p).startswith(str(PI) + "/") for p in pfiles),
          "Pi-hole Compose provenance outside /docker/pihole")
     pcompose = effective(pfiles, PI, "pihole")
-    need("pihole" in pcompose and "nginx" in pcompose,
-         "Expected pihole/nginx services not in Compose")
+    need(all(n in pcompose for n in ("pihole", "nginx", "dnsproxy")),
+         "Expected pihole/nginx/dnsproxy services not in Compose")
+    # dnsproxy shares the Pi-hole network namespace. A DNS-record update
+    # recreates pihole, so dnsproxy must be recreated after its parent.
+    client = inspect("dnsproxy")
+    need(client and client["State"]["Status"] == "running" and
+         labels(client).get("com.docker.compose.project") == "pihole" and
+         labels(client).get("com.docker.compose.service") == "dnsproxy" and
+         files_from_container(client, "pihole") == pfiles and
+         client["HostConfig"].get("NetworkMode") ==
+         "container:" + existing["pihole"]["Id"],
+         "Expected DNS proxy sharing the current Pi-hole network namespace")
+    all_ids = run(["docker", "ps", "-aq"], timeout=20).stdout.split()
+    all_containers = json.loads(run(["docker", "inspect", *all_ids],
+                                    timeout=90).stdout)
+    sharing = sorted(c["Name"].lstrip("/") for c in all_containers
+                     if c["HostConfig"].get("NetworkMode") ==
+                     "container:" + existing["pihole"]["Id"])
+    need(sharing == ["dnsproxy"],
+         "Unknown Pi-hole namespace dependent; refuse DNS recreation")
     domain = tailnet_suffix()
     dns_path, dns_edited, new_domain, lan_ip = locate_dns(
         pfiles, domain, pcompose)
@@ -299,20 +317,23 @@ def save_cert(hostname):
              check=False).returncode == 0, "Exported certificate invalid")
 
 
-def check_pi_diff(old, new, new_domain, lan_ip):
-    compare(old, new, "pihole")  # nginx is permitted separately below
-    # This function is called on the baseline without the nginx overlay.
-    a = dict(old["pihole"])
-    b = dict(new["pihole"])
-    old_env = dict(a.pop("environment"))
-    new_env = dict(b.pop("environment"))
-    need(a == b, "Pi-hole changed beyond environment")
-    previous = old_env.pop("FTLCONF_dns_hosts")
-    current = new_env.pop("FTLCONF_dns_hosts")
-    need(old_env == new_env and
-         current.strip().splitlines() == (previous.strip() + "\n" +
-                                          lan_ip + " " + new_domain).splitlines()
-         or False, "Pi-hole DNS changes are broader than one new A record")
+def recycle_pi(files):
+    # Pi-hole is the dnsproxy network namespace parent. Never leave the
+    # original dnsproxy attached to a replaced Pi-hole container.
+    compose(files, PI, "pihole", "up", "-d", "--no-deps", "--no-build",
+            "--pull", "never", "pihole")
+    compose(files, PI, "pihole", "up", "-d", "--no-deps",
+            "--force-recreate", "--no-build", "--pull", "never", "dnsproxy")
+    compose(files, PI, "pihole", "up", "-d", "--no-deps", "--no-build",
+            "--pull", "never", "nginx")
+    parent = inspect("pihole")
+    proxy = inspect("dnsproxy")
+    need(parent and proxy and
+         parent["State"]["Status"] == "running" and
+         proxy["State"]["Status"] == "running" and
+         proxy["HostConfig"].get("NetworkMode") ==
+         "container:" + parent["Id"],
+         "Pi-hole/dnsproxy dependent network not restored")
 
 
 def apply(context):
@@ -353,10 +374,14 @@ def apply(context):
         ae, be = dict(a.pop("environment")), dict(b.pop("environment"))
         old_records = ae.pop("FTLCONF_dns_hosts")
         new_records = be.pop("FTLCONF_dns_hosts")
-        need(a == b and ae == be and
-             len(new_records.splitlines()) == len(old_records.splitlines()) + 1 and
-             new_records.splitlines() == old_records.splitlines() +
-             [lan_ip + " " + hostname],
+        lines = old_records.splitlines()
+        anchor_indices = [i for i, line in enumerate(lines)
+                          if line.strip() ==
+                          lan_ip + " " + "amutorrent." +
+                          hostname.removeprefix("prowlarr.")]
+        need(len(anchor_indices) == 1, "Original Pi-hole record not unique")
+        lines.insert(anchor_indices[0] + 1, lan_ip + " " + hostname)
+        need(a == b and ae == be and new_records.splitlines() == lines,
              "DNS edit changes anything beyond the one Prowlarr record")
         mount_candidate = effective([*staged_files,
                                      templates["compose.prowlarr.yml"]],
@@ -399,8 +424,7 @@ def apply(context):
         fd = os.open(PIMOUNT, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
         with os.fdopen(fd, "w") as dst:
             dst.write(templates["compose.prowlarr.yml"].read_text())
-        compose([*pfiles, PIMOUNT], PI, "pihole", "up", "-d",
-                "--no-deps", "--no-build", "--pull", "never", "nginx", "pihole")
+        recycle_pi([*pfiles, PIMOUNT])
         need(run(["docker", "exec", "nginx-pihole", "nginx", "-t"],
                  check=False, timeout=15).returncode == 0,
              "nginx configuration test failed after recreation")
@@ -428,8 +452,7 @@ def apply(context):
             if PIMOUNT.exists() and PIMOUNT.read_text() == \
                     templates["compose.prowlarr.yml"].read_text():
                 PIMOUNT.unlink()
-            compose(pfiles, PI, "pihole", "up", "-d", "--no-deps",
-                    "--no-build", "--pull", "never", "nginx", "pihole")
+            recycle_pi(pfiles)
             print("PASS: Pi-hole/nginx Compose restored; Tailscale sidecar retained",
                   file=sys.stderr)
         except Exception as rollback:

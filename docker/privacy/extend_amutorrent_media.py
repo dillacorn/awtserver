@@ -214,13 +214,26 @@ def save_backup(content):
 
 
 def wait_health():
+    # The live aMuTorrent container has Health=none. Require the actual
+    # application /health HTTP endpoint to respond, not Docker's optional
+    # HEALTHCHECK metadata. Run the probe inside the same container.
+    health_script = """const http = require('node:http');
+const req = http.get('http://127.0.0.1:4000/health', (r) => {
+  r.resume();
+  r.on('end', () => { process.exitCode = (r.statusCode === 200 ? 0 : 1); });
+});
+req.setTimeout(4000, () => req.destroy(new Error('health timeout')));
+req.on('error', () => { process.exitCode = 1; });
+"""
     for attempt in range(30):
         am = inspect("amutorrent")
-        if (am and am["State"]["Status"] == "running" and
-                (am["State"].get("Health") or {}).get("Status") == "healthy"):
-            return am
+        if am and am["State"]["Status"] == "running":
+            result = run(["docker", "exec", "amutorrent", "node", "-e",
+                          health_script], timeout=12, check=False)
+            if result.returncode == 0:
+                return am
         time.sleep(2)
-    raise Stop("aMuTorrent did not return to healthy status")
+    raise Stop("aMuTorrent HTTP /health did not return 200")
 
 
 def validate_runtime(expected):

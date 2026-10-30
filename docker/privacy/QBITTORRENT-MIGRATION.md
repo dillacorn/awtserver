@@ -13,6 +13,21 @@ This is a migration plan and candidate overlay for the **observed** `openmediava
 - Root-side pre-restart backup reported: `/docker/privacy/transmission/pre-restart.eXpgzBV6` (only `resume` and `torrents`, not a full configuration backup). Verify before relying on it.
 - Watchtower's exact selected target list includes `transmission`, not `qbittorrent`. Its independent verifier checks the Gluetun namespace and may reject an extra, unselected client. **Do not start qBittorrent in Gluetun until the exact Watchtower manifest and verifier have an approved transition plan.**
 
+## Validated host preflight (operator output, October 30, 2026)
+
+- `docker compose config --format json` over all four live privacy files confirms `gluetun`, `transmission`, `amutorrent`, `prowlarr`, and `trawl`, and no `qbittorrent` service yet.
+- In Gluetun's current namespace, ports **8080** and **25046** have no bound socket; 9091/tcp and 25045/tcp+udp are occupied. A socket scan alone is not proof that Gluetun's firewall accepts a port.
+- `/docker/watchtower-fork/watchtower_verify.py` references Transmission but not qBittorrent. Source review confirms the verifier rejects an unapproved Gluetun namespace child, including a stopped one.
+- All **305** `*.torrent` filenames have matching `*.resume` filenames. Previously counted extra files were unrelated extensions. The counts still do **not** prove each payload's on-disk integrity or completion.
+
+## Offline initialization before any VPN cutover
+
+A separate `compose.qbittorrent-init.yml` defines a temporary **network-isolated** `qbittorrent-init` container. It mounts **only** `/docker/privacy/qbittorrent/config` and publishes no ports. No download/media mounts and no Gluetun dependency. It is expressly **not** the final download client; do not add it to Watchtower, aMuTorrent, or Tailscale. Never run it simultaneously with the final `qbittorrent` service, because they share config state.
+
+Before starting it, validate the complete *existing four-file* Compose set and then compare the five-file effective Compose JSON: all existing service definitions must be byte/semantic-equal and only `qbittorrent-init` may be added. Verify the new host config directory is empty and not a symlink, and back up it if it already contains real data rather than replacing files. Pull the exact intended image, record its digest, then run only the initializer with `docker compose ... up -d --no-deps qbittorrent-init`. Validate that its network mode is `none`, its `/config` bind mount is the expected directory, and that it writes `qBittorrent/qBittorrent.conf`. After config initialization stop the initializer gracefully. Do not display its startup logs without redacting the generated temporary WebUI password.
+
+**Stop point:** Do not launch the final Gluetun-attached `qbittorrent` yet. The Watchtower verifier's exact target/namespace policy would reject it while the existing Transmission is enrolled. Continue with torrent inventory, migration backups, and a coordinated Watchtower cutover.
+
 ## Overlay and port plan
 
 The candidate `compose.qbittorrent.yml` adds only the new service; it does not modify Gluetun, Transmission, Tailscale, or aMuTorrent. It intentionally requires two operator-supplied, verified free **staging** ports and must be appended to all four live Compose files. No host ports are published; the candidate shares Gluetun's network namespace. Create and permission-check the dedicated `/docker/privacy/qbittorrent/config` directory first. Preserve exact existing download/media mounts and original ownership.

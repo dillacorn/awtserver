@@ -26,6 +26,11 @@ def build_fleet():
     fleet["tailscale-qbittorrent"] = make_container(
         "tailscale-qbittorrent", labels=labels.copy()
     )
+    # An existing old Tailscale machine may remain connected during migration.
+    # It is not a member of either Watchtower exact-target policy.
+    fleet["tailscale-transmission"] = make_container(
+        "tailscale-transmission", labels=labels.copy()
+    )
     fleet["transmission"]["State"]["Status"] = "exited"
     names = sorted(verify.QBIT_TRANSITION)
     updater = make_container("watchtower")
@@ -38,10 +43,11 @@ def build_fleet():
 
 
 class QbitPolicyTests(unittest.TestCase):
-    def test_exact_29_target_transition_keeps_old_tailscale_machine(self):
+    def test_exact_29_target_transition_keeps_old_tailscale_machine_unselected(self):
         fleet, names = build_fleet()
         self.assertEqual(len(names), 29)
-        self.assertIn("tailscale-transmission", names)
+        self.assertIn("tailscale-transmission", fleet)
+        self.assertNotIn("tailscale-transmission", names)
         self.assertNotIn("transmission", names)
         self.assertEqual(verify.verify_runtime(fleet, names), names)
 
@@ -59,13 +65,9 @@ class QbitPolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(verify.Stop, "Unapproved additional Gluetun"):
             verify.verify_runtime(fleet, names)
 
-    def test_final_policy_removes_old_tailscale_machine(self):
-        fleet, _ = build_fleet()
+    def test_removing_old_tailscale_machine_needs_no_allowlist_change(self):
+        fleet, names = build_fleet()
         del fleet["tailscale-transmission"]
-        names = sorted(verify.QBIT_FINAL)
-        fleet["watchtower"]["Config"]["Cmd"] = [
-            "--schedule", verify.SCHEDULE, "--no-startup-message", *names
-        ]
         self.assertEqual(verify.verify_runtime(fleet, names), names)
 
     def test_bad_target_set_is_not_accepted(self):
@@ -81,8 +83,7 @@ class QbitPolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             path = root / "targets.json"
-            for names in (sorted(verify.EXPANDED), sorted(verify.QBIT_TRANSITION),
-                          sorted(verify.QBIT_FINAL)):
+            for names in (sorted(verify.EXPANDED), sorted(verify.QBIT_TRANSITION)):
                 path.write_text(json.dumps({
                     "container_names": names,
                     "schedule": verify.SCHEDULE,

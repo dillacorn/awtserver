@@ -5,6 +5,7 @@
 /gluetun/
 /transmission/data/
 /transmission/watch/
+/qbittorrent/
 /mullvad-browser/config/
 /compose.override.yml
 /.env.local

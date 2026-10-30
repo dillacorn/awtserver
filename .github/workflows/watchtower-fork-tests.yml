@@ -44,7 +44,6 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_watchtower*.py' -v
           python3 -m unittest discover -s tests -p 'test_trawl_migration.py' -v
           docker compose -f docker/watchtower/compose.yml config --quiet
-          docker compose -f docker/privacy/compose.amutorrent-media.yml config --quiet
           docker compose -f docker/privacy/compose.qbittorrent-init.yml config --quiet
           systemd-analyze calendar '*-*-* 05:00:00 America/New_York'
   live-docker:

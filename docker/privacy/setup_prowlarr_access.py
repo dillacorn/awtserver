@@ -252,8 +252,12 @@ def preflight(template_dir):
     need(dns_path.stat().st_uid == 0 and
          stat.S_IMODE(dns_path.stat().st_mode) & 0o022 == 0,
          "Pi-hole Compose DNS source has unsafe ownership/permissions")
-    need("system.posix_acl_access" not in os.listxattr(dns_path),
-         "Pi-hole Compose DNS source has an extended ACL; refuse atomic replacement")
+    # Preserve existing POSIX ACLs and other extended attributes verbatim.
+    # The atomic replacement re-applies and verifies these before os.replace.
+    dns_meta = file_metadata(dns_path)
+    print("Pi-hole Compose source ACL:",
+          "present (will be preserved)" if
+          "system.posix_acl_access" in dns_meta[3] else "none")
     nginx = existing["nginx-pihole"]
     mounts = {m["Destination"]: m for m in nginx["Mounts"]}
     need(mounts.get("/etc/nginx/conf.d", {}).get("Source") == str(PI / "conf.d"),
@@ -289,18 +293,51 @@ def preflight(template_dir):
             client_name, service_name)
 
 
+def file_metadata(path):
+    """Inspect exact owner/mode/xattrs (including the POSIX ACL); fail closed."""
+    need(path.is_file() and not path.is_symlink(),
+         "Refuse to replace a missing or symlinked source file")
+    info = path.stat()
+    attrs = {name: os.getxattr(path, name) for name in os.listxattr(path)}
+    return info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode), attrs
+
+
 def atomic(path, content, original=None):
-    mode = stat.S_IMODE(path.stat().st_mode) if original is not None else 0o644
+    """Replace one file, copying and checking *all* source extended ACLs.
+
+    A new inode normally loses named ACL users/groups. Reproduce owner, group,
+    mode and xattrs on the temporary inode first, and compare byte for byte.
+    Refuse to replace the original if ACL copying is unsupported or altered.
+    """
+    baseline = None
+    if original is not None:
+        need(path.read_bytes() == original,
+             "Compose source was changed since the last verification")
+        baseline = file_metadata(path)
     fd, staged = tempfile.mkstemp(prefix=".prowlarr-stage-", dir=path.parent)
     try:
-        os.fchmod(fd, mode)
-        if original is not None:
-            os.fchown(fd, path.stat().st_uid, path.stat().st_gid)
         with os.fdopen(fd, "wb") as out:
+            if baseline is None:
+                os.fchmod(out.fileno(), 0o644)
+            else:
+                uid, gid, mode, attrs = baseline
+                os.fchown(out.fileno(), uid, gid)
+                os.fchmod(out.fileno(), mode)
+                for name, value in attrs.items():
+                    os.setxattr(out.fileno(), name, value)
             out.write(content)
             out.flush()
             os.fsync(out.fileno())
+        if baseline is not None:
+            need(file_metadata(Path(staged)) == baseline,
+                 "Staged Compose file ownership, mode or ACL differs; original untouched")
         os.replace(staged, path)
+        # Persist the directory entry as well as the staged file contents.
+        directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     finally:
         if os.path.exists(staged):
             os.unlink(staged)

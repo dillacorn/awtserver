@@ -1,5 +1,6 @@
 """Read-only tests for qBittorrent rollback's backup integrity gates."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -38,7 +39,7 @@ class RollbackBackupTests(unittest.TestCase):
 
     def check(self):
         with patch.object(rollback, "BACKUP_ROOT", self.root):
-            return rollback.check_backup(self.backup)
+            return rollback.check_backup(self.backup, expected_uid=os.getuid())
 
     def test_exact_backup_is_accepted(self):
         docs, names = self.check()
@@ -50,7 +51,7 @@ class RollbackBackupTests(unittest.TestCase):
         self.backup.rename(renamed)
         with patch.object(rollback, "BACKUP_ROOT", self.root):
             with self.assertRaisesRegex(rollback.Stop, "timestamped"):
-                rollback.check_backup(renamed)
+                rollback.check_backup(renamed, expected_uid=os.getuid())
 
     def test_backup_missing_target_or_world_readable_fails(self):
         target = self.backup / "targets.json"

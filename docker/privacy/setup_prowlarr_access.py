@@ -210,31 +210,37 @@ def preflight(template_dir):
     need(all(str(p).startswith(str(PI) + "/") for p in pfiles),
          "Pi-hole Compose provenance outside /docker/pihole")
     pcompose = effective(pfiles, PI, "pihole")
-    need(all(n in pcompose for n in ("pihole", "nginx", "dnsproxy")),
-         "Expected pihole/nginx/dnsproxy services not in Compose")
-    # dnsproxy shares the Pi-hole network namespace. A DNS-record update
-    # recreates pihole, so dnsproxy must be recreated after its parent.
-    client = inspect("dnsproxy")
-    need(client is not None, "Expected dnsproxy container not found")
-    need(client["State"]["Status"] == "running",
-         "dnsproxy exists but is not running")
-    need(labels(client).get("com.docker.compose.project") == "pihole",
-         "dnsproxy is not managed by the pihole Compose project")
-    need(labels(client).get("com.docker.compose.service") == "dnsproxy",
-         "dnsproxy has unexpected Compose service identity")
-    need(files_from_container(client, "pihole") == pfiles,
-         "dnsproxy was created from a different Pi-hole Compose file set")
-    need(client["HostConfig"].get("NetworkMode") ==
-         "container:" + existing["pihole"]["Id"],
-         "dnsproxy does not use the current Pi-hole network namespace")
+    need("pihole" in pcompose and "nginx" in pcompose,
+         "Expected pihole and nginx services not in Compose")
+    # The OMV server uses dnsproxy-quad9, not a container named dnsproxy.
+    # Find the *actual* dependent of Pi-hole's network namespace, then
+    # independently validate its Compose project, service and original files.
     all_ids = run(["docker", "ps", "-aq"], timeout=20).stdout.split()
+    need(all_ids, "Docker inventory is empty")
     all_containers = json.loads(run(["docker", "inspect", *all_ids],
                                     timeout=90).stdout)
-    sharing = sorted(c["Name"].lstrip("/") for c in all_containers
-                     if c["HostConfig"].get("NetworkMode") ==
-                     "container:" + existing["pihole"]["Id"])
-    need(sharing == ["dnsproxy"],
-         "Unknown Pi-hole namespace dependent; refuse DNS recreation")
+    dependents = [c for c in all_containers
+                  if c["HostConfig"].get("NetworkMode") ==
+                  "container:" + existing["pihole"]["Id"]]
+    need(len(dependents) == 1,
+         "Expected exactly one known Pi-hole namespace dependent")
+    client = dependents[0]
+    client_name = client["Name"].lstrip("/")
+    need(client_name in ("dnsproxy", "dnsproxy-quad9"),
+         "Unexpected container attached to Pi-hole namespace")
+    need(client["State"]["Status"] == "running",
+         "Pi-hole DNS proxy dependent is not running")
+    need(labels(client).get("com.docker.compose.project") == "pihole",
+         "Pi-hole DNS proxy has unexpected Compose project")
+    service_name = labels(client).get("com.docker.compose.service")
+    need(service_name in ("dnsproxy", "dnsproxy-quad9"),
+         "Pi-hole DNS proxy has unexpected Compose service")
+    need(service_name in pcompose,
+         "Pi-hole DNS proxy service is absent from active Compose")
+    need(pcompose[service_name].get("network_mode") == "service:pihole",
+         "Pi-hole DNS proxy Compose service is not namespace-dependent")
+    need(files_from_container(client, "pihole") == pfiles,
+         "Pi-hole DNS proxy uses different Compose file provenance")
     domain = tailnet_suffix()
     dns_path, dns_edited, new_domain, lan_ip = locate_dns(
         pfiles, domain, pcompose)
@@ -267,12 +273,15 @@ def preflight(template_dir):
     print("PASS: Existing six privacy Compose files and Prowlarr VPN unchanged")
     print("PASS: Pi-hole/nginx live Compose provenance and current DNS record verified")
     print("PASS: nginx and Gluetun share the existing local-webapps network")
+    print("PASS: Pi-hole namespace dependent:", client_name,
+          "(Compose service:", service_name + ")")
     print("Planned HTTPS hostname:", new_domain)
     print("Current Pi-hole DNS source:", dns_path)
     print("Current Pi-hole Compose files:", ", ".join(p.name for p in pfiles))
     print("Auth key:", key_status, "(contents never displayed)")
     return (template_files, privfiles, pfiles, pcompose, dns_path,
-            dns_path.read_bytes(), dns_edited, new_domain, lan_ip)
+            dns_path.read_bytes(), dns_edited, new_domain, lan_ip,
+            client_name, service_name)
 
 
 def atomic(path, content, original=None):
@@ -368,28 +377,30 @@ def dns_lookup_a(ip, hostname):
     return found
 
 
-def recycle_pi(files):
-    # Pi-hole is the dnsproxy network namespace parent. Never leave the
-    # original dnsproxy attached to a replaced Pi-hole container.
+def recycle_pi(files, client_name, service_name):
+    # Pi-hole is the proxy's network namespace parent. Recreate the exact
+    # observed Compose service after Pi-hole is replaced. Fail closed if the
+    # dependent's runtime name or network relationship changes.
     compose(files, PI, "pihole", "up", "-d", "--no-deps", "--no-build",
             "--pull", "never", "pihole")
     compose(files, PI, "pihole", "up", "-d", "--no-deps",
-            "--force-recreate", "--no-build", "--pull", "never", "dnsproxy")
+            "--force-recreate", "--no-build", "--pull", "never", service_name)
     compose(files, PI, "pihole", "up", "-d", "--no-deps", "--no-build",
             "--pull", "never", "nginx")
     parent = inspect("pihole")
-    proxy = inspect("dnsproxy")
+    proxy = inspect(client_name)
     need(parent and proxy and
          parent["State"]["Status"] == "running" and
          proxy["State"]["Status"] == "running" and
          proxy["HostConfig"].get("NetworkMode") ==
          "container:" + parent["Id"],
-         "Pi-hole/dnsproxy dependent network not restored")
+         "Pi-hole DNS proxy dependent network not restored")
 
 
 def apply(context):
     (templates, privfiles, pfiles, old_pi, dns_path,
-     saved_dns_bytes, dns_text, hostname, lan_ip) = context
+     saved_dns_bytes, dns_text, hostname, lan_ip,
+     client_name, service_name) = context
     need(AUTH.is_file() and not AUTH.is_symlink() and
          AUTH.stat().st_uid == 0 and
          stat.S_IMODE(AUTH.stat().st_mode) & 0o077 == 0 and
@@ -478,7 +489,7 @@ def apply(context):
         fd = os.open(PIMOUNT, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
         with os.fdopen(fd, "w") as dst:
             dst.write(templates["compose.prowlarr.yml"].read_text())
-        recycle_pi([*pfiles, PIMOUNT])
+        recycle_pi([*pfiles, PIMOUNT], client_name, service_name)
         need(run(["docker", "exec", "nginx-pihole", "nginx", "-t"],
                  check=False, timeout=15).returncode == 0,
              "nginx configuration test failed after recreation")
@@ -516,7 +527,7 @@ def apply(context):
             if PIMOUNT.exists() and PIMOUNT.read_text() == \
                     templates["compose.prowlarr.yml"].read_text():
                 PIMOUNT.unlink()
-            recycle_pi(pfiles)
+            recycle_pi(pfiles, client_name, service_name)
             print("PASS: Pi-hole/nginx Compose restored; Tailscale sidecar retained",
                   file=sys.stderr)
         except Exception as rollback:

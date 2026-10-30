@@ -233,6 +233,11 @@ def preflight(template_dir):
     domain = tailnet_suffix()
     dns_path, dns_edited, new_domain, lan_ip = locate_dns(
         pfiles, domain, pcompose)
+    need(dns_path.stat().st_uid == 0 and
+         stat.S_IMODE(dns_path.stat().st_mode) & 0o022 == 0,
+         "Pi-hole Compose DNS source has unsafe ownership/permissions")
+    need("system.posix_acl_access" not in os.listxattr(dns_path),
+         "Pi-hole Compose DNS source has an extended ACL; refuse atomic replacement")
     nginx = existing["nginx-pihole"]
     mounts = {m["Destination"]: m for m in nginx["Mounts"]}
     need(mounts.get("/etc/nginx/conf.d", {}).get("Source") == str(PI / "conf.d"),

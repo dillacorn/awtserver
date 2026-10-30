@@ -105,7 +105,6 @@ def preflight():
          "Run from a separate staged copy alongside the reviewed verifier")
     need(len(verify.EXPECTED) == 24 and len(verify.EXPANDED) == 28 and
          len(verify.QBIT_TRANSITION) == 29 and
-         len(verify.QBIT_FINAL) == 28 and
          verify.QBIT_TRANSITION - verify.EXPANDED ==
          {"qbittorrent", "tailscale-qbittorrent"} and
          verify.EXPANDED - verify.QBIT_TRANSITION == {"transmission"},

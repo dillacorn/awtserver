@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import socket
 import stat
+import struct
 import subprocess
 import sys
 import tempfile
@@ -317,6 +318,46 @@ def save_cert(hostname):
              check=False).returncode == 0, "Exported certificate invalid")
 
 
+def dns_lookup_a(ip, hostname):
+    """Query Pi-hole's actual DNS socket, not Docker's embedded resolver."""
+    qname = b"".join(bytes([len(label)]) + label.encode("ascii")
+                     for label in hostname.split(".")) + b"\x00"
+    packet = (struct.pack("!HHHHHH", 0x9876, 0x0100, 1, 0, 0, 0) +
+              qname + struct.pack("!HH", 1, 1))
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(3)
+        sock.sendto(packet, (ip, 53))
+        answer, _ = sock.recvfrom(4096)
+    need(len(answer) >= 12 and answer[:2] == b"\x98\x76",
+         "Unexpected Pi-hole DNS reply")
+    _, flags, questions, answers, _, _ = struct.unpack("!HHHHHH",
+                                                        answer[:12])
+    need((flags & 0x000F) == 0 and questions == 1,
+         "Pi-hole returned a DNS error")
+    def skip_name(offset):
+        while offset < len(answer):
+            size = answer[offset]
+            if size & 0xC0 == 0xC0:
+                return offset + 2
+            if size == 0:
+                return offset + 1
+            offset += 1 + size
+        raise Stop("Truncated DNS name in Pi-hole response")
+    offset = skip_name(12) + 4
+    found = []
+    for _ in range(answers):
+        offset = skip_name(offset)
+        need(offset + 10 <= len(answer), "Truncated DNS resource record")
+        kind, klass, _, length = struct.unpack("!HHIH",
+                                               answer[offset:offset+10])
+        offset += 10
+        need(offset + length <= len(answer), "Truncated DNS answer")
+        if kind == 1 and klass == 1 and length == 4:
+            found.append(str(ipaddress.IPv4Address(answer[offset:offset+4])))
+        offset += length
+    return found
+
+
 def recycle_pi(files):
     # Pi-hole is the dnsproxy network namespace parent. Never leave the
     # original dnsproxy attached to a replaced Pi-hole container.
@@ -428,18 +469,28 @@ def apply(context):
         need(run(["docker", "exec", "nginx-pihole", "nginx", "-t"],
                  check=False, timeout=15).returncode == 0,
              "nginx configuration test failed after recreation")
-        # DNS must answer from Pi-hole, not public Tailscale MagicDNS.
-        query = run(["docker", "exec", "pihole", "sh", "-c",
-                     "getent hosts " + hostname], check=False, timeout=20)
-        need(query.returncode == 0 and lan_ip in query.stdout,
-             "Prowlarr local DNS record was not resolved inside Pi-hole")
-        check = run(["curl", "--silent", "--show-error", "--fail",
-                     "--max-time", "15", "--resolve",
-                     hostname + ":443:" + lan_ip,
-                     "https://" + hostname + "/"],
-                    check=False, timeout=20)
-        need(check.returncode == 0,
-             "LAN HTTPS test failed (TLS verified, no insecure flag)")
+        # Query Pi-hole directly, not the container's Docker DNS resolver.
+        for attempt in range(20):
+            try:
+                if lan_ip in dns_lookup_a(lan_ip, hostname):
+                    break
+            except (OSError, Stop):
+                pass
+            time.sleep(2)
+        else:
+            raise Stop("Pi-hole does not serve the new local DNS A record")
+        for attempt in range(20):
+            check = run(["curl", "--silent", "--show-error", "-o", "/dev/null",
+                         "-w", "%{http_code}", "--max-time", "12",
+                         "--resolve", hostname + ":443:" + lan_ip,
+                         "https://" + hostname + "/"],
+                        check=False, timeout=18)
+            if check.returncode == 0 and check.stdout.strip() in (
+                    "200", "301", "302", "303", "307", "308", "401", "403"):
+                break
+            time.sleep(2)
+        else:
+            raise Stop("LAN HTTPS/TLS proxy did not return a web response")
     except Exception as problem:
         print("STOP: Pi-hole/nginx validation failed; attempting scoped rollback",
               file=sys.stderr)

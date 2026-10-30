@@ -1,0 +1,18 @@
+# Offline first-start only. Never add this service to the permanent stack.
+# Keeps qBittorrent out of Gluetun and the Watchtower exact-target policy
+# while its config directory is initialized. No network, media or host ports.
+# Do not run concurrently with the final qbittorrent service.
+services:
+  qbittorrent-init:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent-init
+    network_mode: "none"
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "${TZ:-America/New_York}"
+      WEBUI_PORT: "8080"
+      TORRENTING_PORT: "25046"
+    volumes:
+      - /docker/privacy/qbittorrent/config:/config
+    restart: "no"

@@ -1,0 +1,7 @@
+# Add the existing mergerfs Music directory to the single Transmission client.
+# Keep all original privacy Compose files including the aMuTorrent media overlay.
+# Load last; change/recreate ONLY transmission, not gluetun or amutorrent.
+services:
+  transmission:
+    volumes:
+      - /srv/mergerfs/data/root/Music:/Music:rw

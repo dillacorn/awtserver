@@ -1,0 +1,30 @@
+name: Transmission Music mount checks
+
+on:
+  pull_request:
+    paths:
+      - 'docker/privacy/compose.transmission-music.yml'
+      - 'docker/privacy/extend_transmission_music.py'
+      - 'tests/test_transmission_music.py'
+      - '.github/workflows/transmission-music.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/privacy/compose.transmission-music.yml'
+      - 'docker/privacy/extend_transmission_music.py'
+      - 'tests/test_transmission_music.py'
+      - '.github/workflows/transmission-music.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m py_compile docker/privacy/extend_transmission_music.py
+          python3 -m unittest discover -s tests -p 'test_transmission_music.py' -v
+          printf 'services:\n  transmission:\n    image: busybox\n' > /tmp/transmission-base.yml
+          docker compose -f /tmp/transmission-base.yml -f docker/privacy/compose.transmission-music.yml config --quiet

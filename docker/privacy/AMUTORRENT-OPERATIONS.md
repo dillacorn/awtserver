@@ -102,7 +102,7 @@ The one-time host helper `extend_amutorrent_media.py` is **not** the initial two
 
 **Confirmed 2026-10-30:** The operator ran the revised pinned aMuTorrent extension. It reported all four mounts writable, aMuTorrent health restored, and all unrelated container identities/states preserved. The active fifth privacy Compose overlay is `/docker/privacy/compose.amutorrent-media.yml`. This remains independent of the proposed Transmission Music overlay.
 
-## Transmission Music destination (prepared 2026-10-30; host application pending)
+## Transmission Music destination (host applied and verified 2026-10-29 local / 2026-10-30 UTC)
 
 **Host evidence:** The operator's read-only Docker inspect showed the running single `privacy/transmission` container mounts `/AudioBooks`, `/Books`, `/Movies`, `/Shows`, `/downloads`, `/config`, and `/watch`, but **not** `/Music`. The host directory `/srv/mergerfs/data/root/Music` exists and is not a symlink. The separate aMuTorrent deployment **succeeded** with `/Movies`, `/Shows`, `/AudioBooks`, and `/Music` mounted writable; its own health check and unchanged-other-container check passed. This does **not** make the same Music path automatically available to the actual Transmission download engine.
 
@@ -112,7 +112,9 @@ The one-time host helper `extend_amutorrent_media.py` is **not** the initial two
 
 `--apply` creates only `/docker/privacy/compose.transmission-music.yml` with exclusive-create semantics and invokes `docker compose -p privacy --project-directory /docker/privacy` with **all six** `-f` files, `up -d --no-deps --no-build --pull never transmission`. This briefly recreates **only Transmission**. It verifies the Transmission daemon is running, the newly-mounted path is readable/writable by Transmission's configured PUID:PGID without writing to the media library, and all unrelated container IDs/states are preserved. Failure triggers a best-effort rollback: remove only the exact new overlay and recreate **only Transmission** from the original five files. The complete host output determines whether that rollback succeeded. No torrent state, downloads, Tailscale, Gluetun, or application data is intentionally deleted or modified.
 
-After a successful server run, the aMuTorrent category Download Path for AudioBooks is `/AudioBooks`, and Music can use `/Music` for Transmission. Jellyfin and the separate Audiobookshelf may see these same host libraries under **different internal paths**; do not replace a Transmission category path with a Jellyfin container path.
+**Operator-confirmed host installation:** The pinned Python and overlay file integrity and Python syntax checks passed. Both `--check` and `--apply` verified the current five-file Compose set and preserved the existing media mounts. The apply result reported `PASS: Transmission /Music is mounted and writable by Transmission's UID/GID`, `PASS: Transmission daemon running; other container IDs/states unchanged`, and `PASS: All four aMuTorrent mounts preserved`. The active sixth overlay was confirmed as `/docker/privacy/compose.transmission-music.yml`. The operator has not separately confirmed the Music category warning has disappeared in aMuTorrent's browser UI.
+
+The aMuTorrent category Download Path for AudioBooks is `/AudioBooks`, and Music can now use `/Music` for Transmission. Jellyfin and the separate Audiobookshelf may see these same host libraries under **different internal paths**; do not replace a Transmission category path with a Jellyfin container path.
 
 **Persistent requirement:** Always include the sixth `compose.transmission-music.yml` after the fifth aMuTorrent overlay in **future** privacy Compose commands. The older `mount_amutorrent_media.py` and `extend_amutorrent_media.py` were one-time initializers and must not be rerun against their already-updated baselines. The Transmission Music helper similarly refuses repeat applications. This change does not deploy or require qBittorrent.
 

@@ -10,7 +10,6 @@ import json
 import os
 from pathlib import Path
 import socket
-import stat
 import subprocess
 import sys
 import time
@@ -157,12 +156,10 @@ def apply(source, base, inventory):
     run(*compose_command(files, "pull", "qbittorrent-init"), timeout=240)
     unchanged(inventory)
 
-    started = False
     try:
         run(*compose_command(files, "up", "-d", "--no-deps",
                              "--no-build", "--pull", "never", "qbittorrent-init"),
             timeout=100)
-        started = True
         item = inspect("qbittorrent-init")
         need(item and item["HostConfig"]["NetworkMode"] == "none",
              "Initializer did not start with isolated network")
@@ -182,8 +179,15 @@ def apply(source, base, inventory):
         need(conf.is_file() and conf.stat().st_size > 0,
              "qBittorrent did not create its configuration")
     finally:
-        # Only a container created for this stage is stopped.
-        if started:
+        # Up may time out after it creates a container. Always attempt to stop
+        # the explicitly staged child, but never touch an unknown replacement.
+        staged = inspect("qbittorrent-init")
+        if staged:
+            labels = staged["Config"].get("Labels") or {}
+            need(labels.get("com.docker.compose.project") == "privacy" and
+                 labels.get("com.docker.compose.service") == "qbittorrent-init" and
+                 staged["HostConfig"]["NetworkMode"] == "none",
+                 "Unexpected initializer identity: manual recovery required")
             stop = run(*compose_command(files, "stop", "--timeout", "60",
                                         "qbittorrent-init"),
                        timeout=100, check=False)

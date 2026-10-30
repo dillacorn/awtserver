@@ -3,6 +3,8 @@ import hashlib
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "docker/privacy"))
@@ -46,6 +48,18 @@ class MediaExtensionTests(unittest.TestCase):
                     "type": "bind", "read_only": False}]
         with self.assertRaisesRegex(ext.Stop, "Unexpected Compose mount"):
             ext.validate_volumes(volumes, ext.EXTRA_MOUNTS)
+
+    def test_http_health_succeeds_without_docker_health_metadata(self):
+        # Observed production runtime: State=running, Health=none.
+        with patch.object(ext, "inspect", return_value={
+                "State": {"Status": "running"}}), patch.object(
+                ext, "run", return_value=SimpleNamespace(returncode=0)
+                ) as probe:
+            result = ext.wait_health()
+            self.assertEqual(result["State"]["Status"], "running")
+            args = probe.call_args.args[0]
+            self.assertEqual(args[:4], ["docker", "exec", "amutorrent", "node"])
+            self.assertIn("/health", args[-1])
 
     def test_read_only_mount_is_rejected(self):
         volumes = [{"target": "/Music",

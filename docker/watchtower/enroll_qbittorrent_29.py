@@ -100,7 +100,7 @@ def preflight():
          "Unexpected Watchtower directory")
     new_source = Path(verify.__file__).resolve()
     need(new_source.parent.is_dir() and
-         new_source.name == "watchtower_verify.py" and
+         new_source.name == "watchtower_verify_qbittorrent.py" and
          new_source != VERIFIER.resolve(),
          "Run from a separate staged copy alongside the reviewed verifier")
     need(len(verify.EXPECTED) == 24 and len(verify.EXPANDED) == 28 and

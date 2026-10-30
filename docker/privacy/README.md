@@ -57,6 +57,7 @@ Torrent search and downloads behind Gluetun, including 1337x Cloudflare handling
 
 - **[Manual app setup](AMUTORRENT-SETUP.md)**: exactly what to enter and save in the aMuTorrent and Prowlarr web interfaces; phone-only access, proxy tags, tests and restricted user accounts.
 - [Detailed operations](AMUTORRENT-OPERATIONS.md): live verification, network/UID constraints, persistent data, safety and rollback.
+- [Prowlarr private management URL](PROWLARR-ACCESS.md): dedicated Tailscale machine, local Pi-hole HTTPS, guarded host setup and recovery.
 - Optional Compose examples: [aMuTorrent + Prowlarr](compose.amutorrent.yml) and [TRAWL](compose.trawl.yml).
 
 Don't deploy example overlays over the running host without comparing its current active Compose configuration.

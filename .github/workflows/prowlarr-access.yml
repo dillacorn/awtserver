@@ -1,0 +1,36 @@
+name: Prowlarr private HTTPS setup checks
+
+on:
+  pull_request:
+    paths:
+      - 'docker/privacy/setup_prowlarr_access.py'
+      - 'docker/privacy/compose.prowlarr-access.yml'
+      - 'docker/pihole/compose.prowlarr.yml'
+      - 'docker/pihole/conf.d/prowlarr.conf'
+      - 'tests/test_prowlarr_access.py'
+      - '.github/workflows/prowlarr-access.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/privacy/setup_prowlarr_access.py'
+      - 'docker/privacy/compose.prowlarr-access.yml'
+      - 'docker/pihole/compose.prowlarr.yml'
+      - 'docker/pihole/conf.d/prowlarr.conf'
+      - 'tests/test_prowlarr_access.py'
+      - '.github/workflows/prowlarr-access.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m py_compile docker/privacy/setup_prowlarr_access.py
+          python3 -m unittest discover -s tests -p 'test_prowlarr_access.py' -v
+          printf 'services:\n  gluetun:\n    image: busybox\n' > /tmp/prowlarr-privacy-stub.yml
+          docker compose -f /tmp/prowlarr-privacy-stub.yml -f docker/privacy/compose.prowlarr-access.yml config --quiet
+          printf 'services:\n  nginx:\n    image: nginx:alpine\n' > /tmp/prowlarr-pihole-stub.yml
+          docker compose -f /tmp/prowlarr-pihole-stub.yml -f docker/pihole/compose.prowlarr.yml config --quiet

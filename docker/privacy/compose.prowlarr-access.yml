@@ -1,0 +1,51 @@
+# New standalone Tailscale identity for Prowlarr management.
+# Append after the existing SIX privacy Compose files.
+# Do not move prowlarr outside Gluetun or publish TCP 9696 on LAN/WAN.
+configs:
+  ts-serve-prowlarr:
+    content: |
+      {
+        "TCP": {"443": {"HTTPS": true}},
+        "Web": {
+          "$${TS_CERT_DOMAIN}:443": {
+            "Handlers": {"/": {"Proxy": "http://gluetun:9696"}}
+          }
+        },
+        "AllowFunnel": {"$${TS_CERT_DOMAIN}:443": false}
+      }
+
+services:
+  tailscale-prowlarr:
+    image: tailscale/tailscale:latest
+    container_name: tailscale-prowlarr
+    hostname: prowlarr
+    env_file:
+      - path: ./ts/prowlarr/authkey.env
+        required: false
+    environment:
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_AUTH_ONCE: "true"
+      TS_USERSPACE: "false"
+      TS_ENABLE_HEALTH_CHECK: "true"
+      TS_LOCAL_ADDR_PORT: "127.0.0.1:41234"
+    configs:
+      - source: ts-serve-prowlarr
+        target: /config/serve.json
+    volumes:
+      - ./ts/prowlarr/state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:41234/healthz"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped

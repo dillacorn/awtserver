@@ -215,13 +215,18 @@ def preflight(template_dir):
     # dnsproxy shares the Pi-hole network namespace. A DNS-record update
     # recreates pihole, so dnsproxy must be recreated after its parent.
     client = inspect("dnsproxy")
-    need(client and client["State"]["Status"] == "running" and
-         labels(client).get("com.docker.compose.project") == "pihole" and
-         labels(client).get("com.docker.compose.service") == "dnsproxy" and
-         files_from_container(client, "pihole") == pfiles and
-         client["HostConfig"].get("NetworkMode") ==
+    need(client is not None, "Expected dnsproxy container not found")
+    need(client["State"]["Status"] == "running",
+         "dnsproxy exists but is not running")
+    need(labels(client).get("com.docker.compose.project") == "pihole",
+         "dnsproxy is not managed by the pihole Compose project")
+    need(labels(client).get("com.docker.compose.service") == "dnsproxy",
+         "dnsproxy has unexpected Compose service identity")
+    need(files_from_container(client, "pihole") == pfiles,
+         "dnsproxy was created from a different Pi-hole Compose file set")
+    need(client["HostConfig"].get("NetworkMode") ==
          "container:" + existing["pihole"]["Id"],
-         "Expected DNS proxy sharing the current Pi-hole network namespace")
+         "dnsproxy does not use the current Pi-hole network namespace")
     all_ids = run(["docker", "ps", "-aq"], timeout=20).stdout.split()
     all_containers = json.loads(run(["docker", "inspect", *all_ids],
                                     timeout=90).stdout)

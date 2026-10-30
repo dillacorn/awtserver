@@ -66,11 +66,11 @@ def assert_unrelated(before):
     need(after == before, "Unrelated containers changed during rollback")
 
 
-def private(path):
+def private(path, expected_uid=0):
     need(path.is_file() and not path.is_symlink(),
          f"Expected root-private file absent: {path.name}")
     metadata = path.stat()
-    need(metadata.st_uid == 0 and stat.S_IMODE(metadata.st_mode) & 0o077 == 0,
+    need(metadata.st_uid == expected_uid and stat.S_IMODE(metadata.st_mode) & 0o077 == 0,
          f"File not root-private: {path.name}")
     return path.read_bytes()
 
@@ -79,15 +79,15 @@ def parse(raw):
     return json.loads(raw)
 
 
-def check_backup(directory):
+def check_backup(directory, expected_uid=0):
     need(directory.parent == BACKUP_ROOT and
          re.fullmatch(r"[0-9]{8}T[0-9]{6}Z", directory.name) and
          directory.is_dir() and not directory.is_symlink(),
          "Backup must be the original timestamped Watchtower transition backup")
-    need(directory.stat().st_uid == 0 and
+    need(directory.stat().st_uid == expected_uid and
          stat.S_IMODE(directory.stat().st_mode) & 0o077 == 0,
          "Watchtower backup directory not root-private")
-    originals = {path: private(directory / path.name)
+    originals = {path: private(directory / path.name, expected_uid=expected_uid)
                  for path in (enroll.COMPOSE, enroll.MANIFEST, enroll.VERIFIER)}
     doc = parse(originals[enroll.COMPOSE])
     manifest = parse(originals[enroll.MANIFEST])

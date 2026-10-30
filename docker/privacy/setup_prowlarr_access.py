@@ -423,6 +423,11 @@ def recycle_pi(files, client_name, service_name):
     # Pi-hole is the proxy's network namespace parent. Recreate the exact
     # observed Compose service after Pi-hole is replaced. Fail closed if the
     # dependent's runtime name or network relationship changes.
+    # Stop the DNS proxy before replacing its network-namespace parent:
+    # Docker may refuse to remove/recreate Pi-hole while a live container
+    # references the parent's old container ID. Then re-create the proxy
+    # against the new Pi-hole network namespace, preserving the same service.
+    compose(files, PI, "pihole", "stop", service_name)
     compose(files, PI, "pihole", "up", "-d", "--no-deps", "--no-build",
             "--pull", "never", "pihole")
     compose(files, PI, "pihole", "up", "-d", "--no-deps",

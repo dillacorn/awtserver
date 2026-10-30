@@ -1,0 +1,9 @@
+# Only two extra paths for the existing aMuTorrent container.
+# Needed to clear CategoryModal read+write access warnings for /Movies and /Shows.
+# Add after all currently active privacy Compose overlays; recreate only amutorrent.
+# This intentionally does not change /downloads or any other service.
+services:
+  amutorrent:
+    volumes:
+      - /srv/mergerfs/data/root/Movies:/Movies:rw
+      - /srv/mergerfs/data/root/Shows:/Shows:rw

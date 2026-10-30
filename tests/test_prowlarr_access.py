@@ -1,5 +1,8 @@
 """Pure verification of the separate Prowlarr Tailscale/Pi-hole templates."""
 from pathlib import Path
+import os
+import stat
+import struct
 import sys
 import tempfile
 import unittest
@@ -108,6 +111,45 @@ class AccessTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(p.Stop, "absent from active Compose"):
             p.identify_pi_proxy(parent, [existing], {}, [])
+
+    @staticmethod
+    def acl_fixture(path):
+        # Linux POSIX ACL v2: owner rwx, named user r-x, group r--,
+        # mask r-x, other no permissions. The named user forces xattr ACL.
+        path.write_bytes(b"original compose\n")
+        os.chmod(path, 0o750)
+        value = struct.pack("<I", 2) + b"".join(
+            struct.pack("<HHI", tag, perms, uid) for tag, perms, uid in (
+                (1, 7, 0), (2, 5, 20001), (4, 4, 0),
+                (16, 5, 0), (32, 0, 0)))
+        os.setxattr(path, "system.posix_acl_access", value)
+        return p.file_metadata(path)
+
+    def test_atomic_dns_change_preserves_posix_acl_and_owner(self):
+        with tempfile.TemporaryDirectory() as d:
+            source = Path(d) / "compose.override.yml"
+            baseline = self.acl_fixture(source)
+            self.assertIn("system.posix_acl_access", baseline[3])
+            p.atomic(source, b"modified compose\n", original=b"original compose\n")
+            self.assertEqual(source.read_bytes(), b"modified compose\n")
+            self.assertEqual(p.file_metadata(source), baseline)
+            p.atomic(source, b"original compose\n", original=b"modified compose\n")
+            self.assertEqual(source.read_bytes(), b"original compose\n")
+            self.assertEqual(p.file_metadata(source), baseline)
+
+    def test_acl_copy_error_leaves_original_inode_and_bytes_untouched(self):
+        with tempfile.TemporaryDirectory() as d:
+            source = Path(d) / "compose.override.yml"
+            baseline = self.acl_fixture(source)
+            inode = source.stat().st_ino
+            with patch.object(p.os, "setxattr",
+                              side_effect=OSError("ACL copy denied")):
+                with self.assertRaises(OSError):
+                    p.atomic(source, b"modified compose\n",
+                             original=b"original compose\n")
+            self.assertEqual(source.read_bytes(), b"original compose\n")
+            self.assertEqual(source.stat().st_ino, inode)
+            self.assertEqual(p.file_metadata(source), baseline)
 
     def test_changed_unrelated_services_blocked(self):
         with self.assertRaisesRegex(p.Stop, "Unrelated service changed"):

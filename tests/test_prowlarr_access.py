@@ -151,6 +151,22 @@ class AccessTests(unittest.TestCase):
             self.assertEqual(source.stat().st_ino, inode)
             self.assertEqual(p.file_metadata(source), baseline)
 
+    def test_pi_restart_stops_proxy_before_parent_recreation(self):
+        parent_id = "p" * 64
+        parent = {"Id": parent_id, "State": {"Status": "running"}}
+        proxy = {"State": {"Status": "running"},
+                 "HostConfig": {"NetworkMode": "container:" + parent_id}}
+        paths = [Path("/docker/pihole/compose.yml")]
+        with patch.object(p, "compose") as changes, patch.object(
+                p, "inspect", side_effect=[parent, proxy]):
+            p.recycle_pi(paths, "dnsproxy-quad9", "dnsproxy")
+        self.assertEqual(changes.call_count, 4)
+        self.assertEqual(changes.call_args_list[0].args[-2:],
+                         ("stop", "dnsproxy"))
+        self.assertEqual(changes.call_args_list[1].args[-1], "pihole")
+        self.assertEqual(changes.call_args_list[2].args[-1], "dnsproxy")
+        self.assertEqual(changes.call_args_list[3].args[-1], "nginx")
+
     def test_changed_unrelated_services_blocked(self):
         with self.assertRaisesRegex(p.Stop, "Unrelated service changed"):
             p.compare({"pihole": {}, "dnsproxy": {"image": "old"}},

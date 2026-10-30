@@ -16,9 +16,12 @@ Prowlarr remains the existing `privacy/prowlarr` service behind Gluetun on port 
 
 The setup reads **current Docker labels**, the complete active Pi-hole/nginx Compose file set, and the existing aMuTorrent tailnet identity. It never assumes a static LAN IP or the exact Pi-hole Compose overlay list. It requires a unique existing aMuTorrent `FTLCONF_dns_hosts` line. Pi-hole v6 treats that setting as read-only when provided via the environment, so the script makes a single exact source edit with an on-disk root-only backup rather than attempting to change the record through the Pi-hole UI.
 
+
+**First read-only preflight (2026-10-29):** The original helper stopped without changing the host because it assumed a container called `dnsproxy`. The operator's subsequent read-only Docker inspection confirmed that `pihole` and `nginx-pihole` share the same five Compose files (`compose.yml`, `compose.override.yml`, `compose.tailscale-dns.yml`, `compose.ipv6-dns.yml`, and `compose.amutorrent.yml`); the single Pi-hole namespace dependent is named `dnsproxy-quad9`. The revised helper discovers the dependent dynamically and requires an approved service identity and matching Compose provenance before any write. The service label is **not yet verified** from the operator's output; rerun the read-only preflight to confirm it.
+
 ## Host preparation
 
-First run **only `--check`** and inspect the output. It makes no changes. The server must report existing Gluetun/Prowlarr running, valid six-file privacy configuration, current Pi-hole/nginx Compose provenance, exactly one known DNS source line, a valid nginx network path, and a single `dnsproxy` container sharing the Pi-hole namespace. **Stop if any check fails.** This is not a server-port-forwarding or SSH-configuration fix.
+First run **only `--check`** and inspect the output. It makes no changes. The server must report existing Gluetun/Prowlarr running, valid six-file privacy configuration, current Pi-hole/nginx Compose provenance, exactly one known DNS source line, a valid nginx network path, and exactly one approved DNS proxy sharing the Pi-hole namespace. The current OMV host reports its dependent as `dnsproxy-quad9`, **not** `dnsproxy`. The helper locates it by the actual namespace relationship and requires that its Compose service and file provenance match the live Pi-hole stack. **Stop if any check fails.** This is not a server-port-forwarding or SSH-configuration fix.
 
 Before apply, place the Tailscale auth key in this **host-only** file:
 
@@ -36,7 +39,7 @@ Do not show the key on the terminal or paste it into GitHub. `--apply` must be r
 
 ## DNS and rollback boundary
 
-Pi-hole uses `dnsproxy` in its network namespace. A Pi-hole recreation invalidates that dependent namespace, so the script checks for **exactly one** dependent `dnsproxy`. When adding the record, it recreates **only** Pi-hole, then `dnsproxy`, then nginx, using the full active Pi-hole Compose files plus the new certificate overlay. DNS service can be briefly interrupted. It verifies Pi-hole answers the new A record locally and the HTTPS endpoint returns through nginx with a trusted certificate.
+Pi-hole uses `dnsproxy` in its network namespace. A Pi-hole recreation invalidates that dependent namespace, so the script checks for **exactly one** dependent DNS proxy (`dnsproxy-quad9` on this OMV host), verifies its actual Compose service identity, When adding the record, it recreates **only** Pi-hole, then the verified DNS proxy Compose service, then nginx, using the full active Pi-hole Compose files plus the new certificate overlay. DNS service can be briefly interrupted. It verifies Pi-hole answers the new A record locally and the HTTPS endpoint returns through nginx with a trusted certificate.
 
 The original Pi-hole Compose file is backed up under `/root/awtserver-prowlarr-access/<timestamp>-<pid>/`. If validation fails after the DNS stage, the script attempts to restore that original file, remove only its newly created site/overlay, and recreate the same three Pi-hole components. The Tailscale sidecar is intentionally retained for diagnostics. A failure before the Pi-hole stage never recreates DNS. No script can guarantee recovery from independent failures during restart: inspect the output and backup if rollback cannot be confirmed.
 

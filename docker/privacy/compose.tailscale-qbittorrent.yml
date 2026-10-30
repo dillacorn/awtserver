@@ -1,0 +1,52 @@
+# New, independent Tailscale machine for the eventual qBittorrent cutover.
+# Keep tailscale-transmission intact until the replacement is verified.
+# The qBittorrent WebUI must be listening at 9091 *after* Transmission stops.
+# Do not deploy before the coordinated Watchtower and privacy cutover.
+configs:
+  ts-serve-qbittorrent:
+    content: |
+      {
+        "TCP": {"443": {"HTTPS": true}},
+        "Web": {
+          "$${TS_CERT_DOMAIN}:443": {
+            "Handlers": {"/": {"Proxy": "http://gluetun:9091"}}
+          }
+        },
+        "AllowFunnel": {"$${TS_CERT_DOMAIN}:443": false}
+      }
+
+services:
+  tailscale-qbittorrent:
+    image: tailscale/tailscale:latest
+    container_name: tailscale-qbittorrent
+    hostname: qbittorrent
+    env_file:
+      - path: ./ts/qbittorrent/authkey.env
+        required: false
+    environment:
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: "false"
+      TS_ENABLE_HEALTH_CHECK: "true"
+      TS_LOCAL_ADDR_PORT: "127.0.0.1:41234"
+      TS_AUTH_ONCE: "true"
+    configs:
+      - source: ts-serve-qbittorrent
+        target: /config/serve.json
+    volumes:
+      - ./ts/qbittorrent/state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:41234/healthz"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped

@@ -10,6 +10,10 @@ on:
       - 'tests/test_trawl_migration.py'
       - 'tests/test_watchtower_verifier.py'
       - 'tests/test_watchtower_28_enroll.py'
+      - 'tests/test_watchtower_qbittorrent.py'
+      - 'docker/privacy/mount_amutorrent_media.py'
+      - 'docker/privacy/compose.amutorrent-media.yml'
+      - 'docker/privacy/preflight_qbittorrent_integrations.py'
       - '.github/workflows/watchtower-fork-tests.yml'
   push:
     branches: [main]
@@ -21,6 +25,10 @@ on:
       - 'tests/test_trawl_migration.py'
       - 'tests/test_watchtower_verifier.py'
       - 'tests/test_watchtower_28_enroll.py'
+      - 'tests/test_watchtower_qbittorrent.py'
+      - 'docker/privacy/mount_amutorrent_media.py'
+      - 'docker/privacy/compose.amutorrent-media.yml'
+      - 'docker/privacy/preflight_qbittorrent_integrations.py'
       - '.github/workflows/watchtower-fork-tests.yml'
 
 permissions:
@@ -32,10 +40,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          python3 -m py_compile docker/watchtower/*.py docker/privacy/migrate_trawl.py tests/watchtower_fork_*.py
+          python3 -m py_compile docker/watchtower/*.py docker/privacy/migrate_trawl.py docker/privacy/stage_qbittorrent.py docker/privacy/preflight_qbittorrent_integrations.py docker/privacy/mount_amutorrent_media.py tests/watchtower_fork_*.py
           python3 -m unittest discover -s tests -p 'test_watchtower*.py' -v
           python3 -m unittest discover -s tests -p 'test_trawl_migration.py' -v
           docker compose -f docker/watchtower/compose.yml config --quiet
+          docker compose -f docker/privacy/compose.amutorrent-media.yml config --quiet
+          docker compose -f docker/privacy/compose.qbittorrent-init.yml config --quiet
           systemd-analyze calendar '*-*-* 05:00:00 America/New_York'
   live-docker:
     runs-on: ubuntu-latest

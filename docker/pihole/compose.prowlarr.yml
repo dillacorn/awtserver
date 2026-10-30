@@ -1,0 +1,7 @@
+# Add a certificate directory to the existing nginx-pihole service ONLY.
+# Append after ALL currently active Pi-hole Compose overlays.
+# Add the DNS A record through the guarded Prowlarr setup, not this overlay.
+services:
+  nginx:
+    volumes:
+      - /docker/privacy/ts/prowlarr/state/certs:/etc/nginx/prowlarr-certs:ro

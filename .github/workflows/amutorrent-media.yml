@@ -1,0 +1,30 @@
+name: aMuTorrent media mount extension checks
+
+on:
+  pull_request:
+    paths:
+      - 'docker/privacy/compose.amutorrent-media.yml'
+      - 'docker/privacy/extend_amutorrent_media.py'
+      - 'tests/test_amutorrent_media_extension.py'
+      - '.github/workflows/amutorrent-media.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docker/privacy/compose.amutorrent-media.yml'
+      - 'docker/privacy/extend_amutorrent_media.py'
+      - 'tests/test_amutorrent_media_extension.py'
+      - '.github/workflows/amutorrent-media.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m py_compile docker/privacy/extend_amutorrent_media.py
+          python3 -m unittest discover -s tests -p 'test_amutorrent_media_extension.py' -v
+          printf 'services:\n  amutorrent:\n    image: busybox\n' > /tmp/amutorrent-base.yml
+          docker compose -f /tmp/amutorrent-base.yml -f docker/privacy/compose.amutorrent-media.yml config --quiet

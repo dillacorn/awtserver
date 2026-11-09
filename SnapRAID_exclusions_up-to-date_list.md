@@ -28,7 +28,14 @@ pg_filenode.map
 tailscaled.log*.txt
 tailscaled.state
 compose.override.yml
+/root/docker_week/immich/postgres/
 ```
+
+`/root/docker_week/immich/postgres/` excludes Immich's live PostgreSQL directory
+from parity, not from the filesystem or independent database backups. The
+November 9, 2026 OMV AIO run completed sync and scrub after this exclusion;
+the previously protected PostgreSQL files appeared as removed from parity,
+not deleted from disk.
 
 `tailscaled.state` excludes Tailscale's volatile identity/state file by filename
 at any array depth. This is a **SnapRAID parity exclusion**, not a deletion
